@@ -1,6 +1,6 @@
 # OAuthKit
 
-A Swift OAuth2 and OpenID Connect client library with modern async/await support, built on top of JWT-Kit which works on Linux.
+A Swift OAuth2 and OpenID Connect client library with modern async/await support, built on top of JWT-Kit that works on Linux too.
 
 ## Features
 
