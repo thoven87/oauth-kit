@@ -248,7 +248,7 @@ public struct OpenIDConnectClient {
             let jwt = try await signers.verify(idToken, as: IDTokenClaims.self)
 
             // Validate issuer
-            guard jwt.iss == configuration.issuer else {
+            guard jwt.iss?.value == configuration.issuer else {
                 throw OAuth2Error.tokenValidationError("Invalid issuer: \(jwt.iss ?? "nil") != \(configuration.issuer)")
             }
 
@@ -258,13 +258,13 @@ public struct OpenIDConnectClient {
             }
 
             // Validate expiration time
-            let currentTime = Date().timeIntervalSince1970
-            guard let expirationTime = jwt.exp, expirationTime > currentTime else {
+            let currentTime = Date()
+            guard let expirationTime = jwt.exp?.value, expirationTime > currentTime else {
                 throw OAuth2Error.tokenValidationError("Token has expired")
             }
 
             // Validate issued at time
-            if let issuedAt = jwt.iat, issuedAt > currentTime {
+            if let issuedAt = jwt.iat?.value, issuedAt > currentTime {
                 throw OAuth2Error.tokenValidationError("Token issued in the future")
             }
 
@@ -283,7 +283,7 @@ public struct OpenIDConnectClient {
     /// Load JSON Web Key Set from the provider
     /// - Throws: OAuth2Error if the JWKS can't be loaded
     private static func loadJWKS(httpClient: HTTPClient = .shared, jwksURI: String) async throws -> JWKS {
-        let logger = Logger(label: "org.openid.connect.client")
+        let logger = Logger(label: "com.oauthkit.OpenIDConnectClient")
 
         var request = HTTPClientRequest(url: jwksURI)
         request.method = .GET
@@ -312,19 +312,19 @@ public struct OpenIDConnectClient {
 /// Standard claims in an OpenID Connect ID token
 public struct IDTokenClaims: JWTPayload, Equatable {
     /// Issuer identifier
-    public let iss: String?
+    public let iss: IssuerClaim?
 
     /// Subject identifier
-    public let sub: String?
+    public let sub: SubjectClaim?
 
     /// Audience(s) that the JWT is intended for
     public let aud: [String]?
 
     /// Expiration time
-    public let exp: TimeInterval?
+    public let exp: ExpirationClaim?
 
     /// Time at which the JWT was issued
-    public let iat: TimeInterval?
+    public let iat: IssuedAtClaim?
 
     /// Time when the authentication occurred
     public let authTime: TimeInterval?
@@ -394,8 +394,8 @@ public struct IDTokenClaims: JWTPayload, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        iss = try container.decodeIfPresent(String.self, forKey: .iss)
-        sub = try container.decodeIfPresent(String.self, forKey: .sub)
+        iss = try container.decodeIfPresent(IssuerClaim.self, forKey: .iss)
+        sub = try container.decodeIfPresent(SubjectClaim.self, forKey: .sub)
 
         // Handle aud as either a single string or an array of strings
         if let audString = try? container.decode(String.self, forKey: .aud) {
@@ -404,8 +404,8 @@ public struct IDTokenClaims: JWTPayload, Equatable {
             aud = try container.decodeIfPresent([String].self, forKey: .aud)
         }
 
-        exp = try container.decodeIfPresent(TimeInterval.self, forKey: .exp)
-        iat = try container.decodeIfPresent(TimeInterval.self, forKey: .iat)
+        exp = try container.decodeIfPresent(ExpirationClaim.self, forKey: .exp)
+        iat = try container.decodeIfPresent(IssuedAtClaim.self, forKey: .iat)
         authTime = try container.decodeIfPresent(TimeInterval.self, forKey: .authTime)
         nonce = try container.decodeIfPresent(String.self, forKey: .nonce)
         acr = try container.decodeIfPresent(String.self, forKey: .acr)
@@ -515,10 +515,8 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         }
     }
 
-    //public func verify(using signer: JWTSigner) throws {
     public func verify(using algorithm: some JWTAlgorithm) throws {
-        // JWT-Kit will verify expiration and issuance times
-
+        try exp?.verifyNotExpired()
     }
 }
 
