@@ -25,14 +25,18 @@ jobs:
         image:
           - "swift:6.1"
         dex-image:
-          - "ghcr.io/dexidp/dex:v2.37.0"
+          - "ghcr.io/dexidp/dex:latest"
         include:
-          - dex-image: ghcr.io/dexidp/dex:v2.37.0
+          - dex-image: ghcr.io/dexidp/dex:latest
     container:
       image: ${{ matrix.image }}
     services:
       dex:
         image: ${{ matrix.dex-image }}
+        ports:
+          - 5556:5556
+        volumes:
+          - ${{ github.workspace }}/build/volume/oauth-kit/infra/config.yaml:/etc/dex/config.yaml:ro
     steps:
       - name: Checkout
         uses: actions/checkout@v4
