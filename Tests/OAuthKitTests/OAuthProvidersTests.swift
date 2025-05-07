@@ -13,11 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 import AsyncHTTPClient
+import Foundation
 import Logging
 import Testing
 
 @testable import OAuthKit
-import Foundation
 
 @Suite("OAuth Providers Tests")
 struct OAuthProvidersTests {
@@ -39,35 +39,35 @@ struct OAuthProvidersTests {
         #expect(lp.url.absoluteString.contains("code_challenge"))
     }
 
-//    @Test("Microsoft Provider Creation")
-//    func testMicrosoftProviderCreation() async throws {
-//        let microsoftProvider = try await oauthKit.microsoftProvider(
-//            clientID: "some-client-id",
-//            clientSecret: "some-client-secret",
-//            tenantID: "some-tenant-id",
-//            redirectURI: redirectURI
-//        )
-//        let signInURL = try microsoftProvider.signInURL(
-//            state: "some-state-value",
-//        )
-//
-//        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
-//    }
-//
-//    @Test("GitHub Provider Creation")
-//    func testGitHubProviderCreation() async throws {
-//        let githubProvider = oauthKit.githubProvider(
-//            clientID: "",
-//            clientSecret: "",
-//            redirectURI: redirectURI
-//        )
-//
-//        let signInURL = try githubProvider.signInURL()
-//        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
-//        #expect(signInURL.url.absoluteString.contains("client_id"))
-//        #expect(signInURL.codeVerifier != nil)
-//
-//    }
+    //    @Test("Microsoft Provider Creation")
+    //    func testMicrosoftProviderCreation() async throws {
+    //        let microsoftProvider = try await oauthKit.microsoftProvider(
+    //            clientID: "some-client-id",
+    //            clientSecret: "some-client-secret",
+    //            tenantID: "some-tenant-id",
+    //            redirectURI: redirectURI
+    //        )
+    //        let signInURL = try microsoftProvider.signInURL(
+    //            state: "some-state-value",
+    //        )
+    //
+    //        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
+    //    }
+    //
+    //    @Test("GitHub Provider Creation")
+    //    func testGitHubProviderCreation() async throws {
+    //        let githubProvider = oauthKit.githubProvider(
+    //            clientID: "",
+    //            clientSecret: "",
+    //            redirectURI: redirectURI
+    //        )
+    //
+    //        let signInURL = try githubProvider.signInURL()
+    //        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
+    //        #expect(signInURL.url.absoluteString.contains("client_id"))
+    //        #expect(signInURL.codeVerifier != nil)
+    //
+    //    }
 
     //    @Test("Apple Provider Creation")
     //    func testAppleProviderCreation() async throws {
@@ -112,33 +112,33 @@ struct OAuthProvidersTests {
         #expect(signInURL.codeVerifier != nil)
     }
 
-//    @Test("Okta Provider Creation")
-//    func testOktaProviderCreation() async throws {
-//        let oktaProvider = try await oauthKit.oktaProvider(
-//            domain: "oauthkit.swift",
-//            clientID: "",
-//            clientSecret: "",
-//            redirectURI: redirectURI
-//        )
-//        let signInURL = try await oktaProvider.signInURL()
-//        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
-//        #expect(signInURL.url.absoluteString.contains("client_id"))
-//        #expect(signInURL.codeVerifier != nil)
-//    }
+    //    @Test("Okta Provider Creation")
+    //    func testOktaProviderCreation() async throws {
+    //        let oktaProvider = try await oauthKit.oktaProvider(
+    //            domain: "oauthkit.swift",
+    //            clientID: "",
+    //            clientSecret: "",
+    //            redirectURI: redirectURI
+    //        )
+    //        let signInURL = try await oktaProvider.signInURL()
+    //        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
+    //        #expect(signInURL.url.absoluteString.contains("client_id"))
+    //        #expect(signInURL.codeVerifier != nil)
+    //    }
 
-//    @Test("AWS Cognito Provider Creation")
-//    func testAWSCognitoProviderCreation() async throws {
-//        let cognitoProvider = try await oauthKit.awsCognitoProvider(
-//            region: "us-east-1",
-//            userPoolID: "some-user-pool-id",
-//            clientID: "some-client-id",
-//            redirectURI: redirectURI
-//        )
-//        let signInURL = try cognitoProvider.signInURL()
-//        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
-//        #expect(signInURL.url.absoluteString.contains("client_id"))
-//        #expect(signInURL.codeVerifier != nil)
-//    }
+    //    @Test("AWS Cognito Provider Creation")
+    //    func testAWSCognitoProviderCreation() async throws {
+    //        let cognitoProvider = try await oauthKit.awsCognitoProvider(
+    //            region: "us-east-1",
+    //            userPoolID: "some-user-pool-id",
+    //            clientID: "some-client-id",
+    //            redirectURI: redirectURI
+    //        )
+    //        let signInURL = try cognitoProvider.signInURL()
+    //        #expect(signInURL.url.absoluteString.contains("redirect_uri"))
+    //        #expect(signInURL.url.absoluteString.contains("client_id"))
+    //        #expect(signInURL.codeVerifier != nil)
+    //    }
 
     @Test("Google Provider Sign-In URL")
     func testGoogleProviderSignInURL() async throws {
