@@ -32,7 +32,7 @@ struct OAuthProvidersTests {
         let googleProvider = try await oauthKit.googleProvider(
             clientID: "",
             clientSecret: "",
-            redirectURI: "app://brebo.io"
+            redirectURI: redirectURI
         )
         let lp = try googleProvider.signInURL()
         #expect(lp.codeVerifier != nil)

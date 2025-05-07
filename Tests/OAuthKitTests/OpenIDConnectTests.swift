@@ -110,8 +110,8 @@ struct OpenIDConnectTests {
         #expect(client.clientSecret == "test-client-secret")
         #expect(client.redirectURI == "https://example.com/callback")
         #expect(client.scope == "openid profile email")
-        #expect(client.configuration.authorizationEndpoint == "http://localhost:5556/dex/auth")
-        #expect(client.configuration.tokenEndpoint == "http://localhost:5556/dex/token")
+        #expect(client.configuration.authorizationEndpoint == "\(dexURL)/dex/auth")
+        #expect(client.configuration.tokenEndpoint == "\(dexURL)/dex/token")
     }
 
     @Test("Get user info")

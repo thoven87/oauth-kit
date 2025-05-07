@@ -283,7 +283,7 @@ public struct OpenIDConnectClient {
     /// Load JSON Web Key Set from the provider
     /// - Throws: OAuth2Error if the JWKS can't be loaded
     private static func loadJWKS(httpClient: HTTPClient = .shared, jwksURI: String) async throws -> JWKS {
-        let logger = Logger(label: "org.openid.connect.client")
+        let logger = Logger(label: "com.oauthkit.OpenIDConnectClient")
 
         var request = HTTPClientRequest(url: jwksURI)
         request.method = .GET
