@@ -45,3 +45,5 @@ jobs:
       - name: Run Tests
         run: |
           swift test --skip-build --configuration debug --disable-xctest
+        env:
+          DEX_URL: http://dex:5556
