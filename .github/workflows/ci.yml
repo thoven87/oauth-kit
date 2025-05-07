@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**.swift"
+      - "**.yml"
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-ci
+  cancel-in-progress: true
+
+env:
+  LOG_LEVEL: info
+  SWIFT_DETERMINISTIC_HASHING: 1
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        image:
+          - "swift:6.1"
+        dex-image:
+          - "ghcr.io/dexidp/dex:v2.37.0"
+        include:
+          - dex-image: ghcr.io/dexidp/dex:v2.37.0
+    container:
+      image: ${{ matrix.image }}
+    services:
+      dex:
+        image: ${{ matrix.dex-image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors -Xcc -Werror --sanitize address --disable-xctest
+      - name: Run Tests
+        run: |
+          swift test --skip-build --configuration debug --disable-xctest
