@@ -17,6 +17,7 @@ import Foundation
 import Logging
 import NIOCore
 import NIOHTTP1
+import NIOFoundationCompat
 
 /// Provider for Slack OAuth authentication
 public struct SlackOAuthProvider {

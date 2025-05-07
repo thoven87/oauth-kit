@@ -17,6 +17,7 @@ import Crypto
 import Foundation
 import JWTKit
 import Logging
+import NIOFoundationCompat
 
 /// Client for interacting with OAuth2 providers
 public class OAuth2Client {

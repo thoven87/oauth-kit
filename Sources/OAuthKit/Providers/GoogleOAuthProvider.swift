@@ -14,6 +14,7 @@
 
 import AsyncHTTPClient
 import Foundation
+import NIOFoundationCompat
 
 /// Provider for Google OAuth2/OpenID Connect authentication
 public struct GoogleOAuthProvider {

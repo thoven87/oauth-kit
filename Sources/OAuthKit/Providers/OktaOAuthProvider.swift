@@ -15,6 +15,7 @@
 import AsyncHTTPClient
 import Foundation
 import NIOCore
+import NIOFoundationCompat
 
 /// Provider for Okta OAuth2/OpenID Connect authentication
 public struct OktaOAuthProvider {

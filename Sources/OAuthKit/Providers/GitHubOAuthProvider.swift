@@ -15,6 +15,7 @@
 import AsyncHTTPClient
 import Foundation
 import Logging
+import NIOFoundationCompat
 
 /// Provider for GitHub OAuth authentication
 public struct GitHubOAuthProvider {

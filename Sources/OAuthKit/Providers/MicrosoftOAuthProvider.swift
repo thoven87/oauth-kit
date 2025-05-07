@@ -15,6 +15,7 @@
 import AsyncHTTPClient
 import Foundation
 import Logging
+import NIOFoundationCompat
 
 /// Provider for Microsoft OAuth2/OpenID Connect authentication
 public struct MicrosoftOAuthProvider {

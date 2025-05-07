@@ -15,6 +15,7 @@
 import AsyncHTTPClient
 import Foundation
 import NIOCore
+import NIOFoundationCompat
 
 /// Provider for KeyCloak OAuth authentication
 public struct KeyCloakOAuthProvider {

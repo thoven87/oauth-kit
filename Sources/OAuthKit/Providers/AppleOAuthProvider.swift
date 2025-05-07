@@ -16,6 +16,7 @@ import AsyncHTTPClient
 import Foundation
 import JWTKit
 import Logging
+import NIOFoundationCompat
 
 /// Provider for Apple OAuth authentication (Sign in with Apple)
 public struct AppleOAuthProvider {

@@ -16,6 +16,7 @@ import AsyncHTTPClient
 import Foundation
 import JWTKit
 import Logging
+import NIOFoundationCompat
 
 /// Client for interacting with OpenID Connect providers
 public struct OpenIDConnectClient {
