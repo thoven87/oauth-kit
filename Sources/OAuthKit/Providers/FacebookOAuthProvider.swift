@@ -15,8 +15,8 @@
 import AsyncHTTPClient
 import Foundation
 import NIOCore
-import NIOHTTP1
 import NIOFoundationCompat
+import NIOHTTP1
 
 /// Provider for Facebook OAuth authentication
 public struct FacebookOAuthProvider {
