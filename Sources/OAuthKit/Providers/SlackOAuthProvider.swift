@@ -63,7 +63,7 @@ public struct SlackOAuthProvider {
 
         // Generate PKCE if requested
         if usePKCE {
-            let pkce = OAuth2Client.generatePKCE()
+            let pkce = SlackOAuth2Client.generatePKCE()
             codeVerifier = pkce.codeVerifier
             codeChallenge = pkce.codeChallenge
         }
@@ -187,36 +187,65 @@ public struct SlackOAuthProvider {
 }
 
 /// Slack-specific OAuth2 client that handles Slack's comma-separated scopes
-public class SlackOAuth2Client: OAuth2Client {
+public struct SlackOAuth2Client: OAuth2ClientProtocol {
+    /// HTTP client for making requests
+    public var httpClient: AsyncHTTPClient.HTTPClient
+
+    /// Slack client id
+    public var clientID: String
+
+    /// Slack secret
+    public var clientSecret: String
+
+    /// Slack token endpoint
+    public var tokenEndpoint: String
+
+    /// Slack authorization endpoint
+    public var authorizationEndpoint: String?
+
+    /// Redirect URI registered with the Slack provider
+    public var redirectURI: String?
+
+    /// Requested scopes (space-separated)
+    public var scope: String
+
+    /// Logger used for SlackOAuth2Client operations
+    public var logger: Logging.Logger
+
     /// The scopes requested for Slack (array of strings)
     private let slackScopes: [String]
 
-    /// Initialize a new Slack OAuth2 client
+    /// Initialize a new SlackOAuth2Client client
+    /// - Parameters:
+    ///   - httpClient: The HTTP client used for making requests
+    ///   - clientID: The Slack  client ID
+    ///   - clientSecret: The  Slack client secret
+    ///   - redirectURI: The redirect URI registered with Slack
+    ///   - scope: The requested scopes (space-separated)
+    ///   - logger: Logger used for SlackOAuth2Client operations
     public init(
-        httpClient: HTTPClient,
+        httpClient: HTTPClient = .shared,
         clientID: String,
         clientSecret: String,
-        tokenEndpoint: String,
-        authorizationEndpoint: String? = nil,
         redirectURI: String? = nil,
         scopes: [String] = [],
         logger: Logger = Logger(label: "com.oauthkit.SlackOAuth2Client")
     ) {
+
+        self.httpClient = httpClient
+        self.clientID = clientID
+        self.clientSecret = clientSecret
+        self.tokenEndpoint = SlackOAuthProvider.Endpoints.token
+        self.authorizationEndpoint = SlackOAuthProvider.Endpoints.authorization
+        self.redirectURI = redirectURI
+        self.logger = logger
+
         self.slackScopes = scopes
 
         // Convert array of scopes to comma-separated string for Slack
         let scopeString = scopes.joined(separator: ",")
 
-        super.init(
-            httpClient: httpClient,
-            clientID: clientID,
-            clientSecret: clientSecret,
-            tokenEndpoint: tokenEndpoint,
-            authorizationEndpoint: authorizationEndpoint,
-            redirectURI: redirectURI,
-            scope: scopeString,
-            logger: logger
-        )
+        self.scope = scopeString
     }
 
     /// Exchange an authorization code for tokens with GitHub

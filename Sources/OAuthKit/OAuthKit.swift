@@ -240,8 +240,6 @@ public struct OAuthKit {
                 httpClient: httpClient,
                 clientID: clientID,
                 clientSecret: clientSecret,
-                tokenEndpoint: SlackOAuthProvider.Endpoints.token,
-                authorizationEndpoint: SlackOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
                 scopes: scopes
             )
