@@ -33,7 +33,7 @@ public struct AppleOAuthProvider {
 
         /// The JSON Web Key Set endpoint URL
         public static let jwks = "https://appleid.apple.com/auth/keys"
-        
+
         /// The Issuer URL
         public static let issuer = "https://appleid.apple.com"
     }
@@ -101,9 +101,6 @@ public struct AppleOAuthProvider {
         code: String,
         codeVerifier: String? = nil
     ) async throws -> TokenResponse {
-        //        guard let appleClient = client else {
-        //            throw OAuth2Error.configurationError("Client must be created with AppleOAuthProvider.createClient")
-        //        }
 
         let parameters = [
             "client_secret": "YOUR_CLIENT_SECRET"
@@ -175,20 +172,28 @@ public struct AppleOAuthProvider {
 
 /// Apple-specific OAuth2 client that generates a JWT client secret automatically
 public struct AppleOAuth2Client: OAuth2ClientProtocol {
+    /// HTTP client for making requests
     public var httpClient: AsyncHTTPClient.HTTPClient
 
+    /// Apple client ID
     public var clientID: String
 
+    /// Apple client secret
     public var clientSecret: String
 
+    /// Apple token enpoint
     public var tokenEndpoint: String
 
+    /// Apple Autherization Endpoint
     public var authorizationEndpoint: String?
 
+    /// Redirect URI registered with Apple
     public var redirectURI: String?
 
+    /// Requested scopes (space-separated)
     public var scope: String
 
+    /// Logger used for AppleOAuth2Client operations
     public var logger: Logging.Logger
 
     /// The Team ID from Apple Developer portal
@@ -207,6 +212,7 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
     let jwtKeys: JWTKeyCollection
 
     /// Initialize a new Apple OAuth2 client
+    ///
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
         clientID: String,
@@ -214,10 +220,8 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         teamID: String,
         keyID: String,
         privateKey: String,
-        tokenEndpoint: String,
-        authorizationEndpoint: String? = nil,
         redirectURI: String? = nil,
-        scope: String = "",
+        scopes: [String] = [],
         jwksURL: String,
         logger: Logger = Logger(label: "com.oauthkit.AppleOAuth2Client")
     ) async throws {
@@ -225,10 +229,10 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         self.httpClient = httpClient
         self.clientID = clientID
         self.clientSecret = clientSecret
-        self.tokenEndpoint = tokenEndpoint
-        self.authorizationEndpoint = authorizationEndpoint
+        self.tokenEndpoint = AppleOAuthProvider.Endpoints.token
+        self.authorizationEndpoint = AppleOAuthProvider.Endpoints.authorization
         self.redirectURI = redirectURI
-        self.scope = scope
+        self.scope = Self.scopesToString(scopes)
         self.logger = logger
 
         self.teamID = teamID

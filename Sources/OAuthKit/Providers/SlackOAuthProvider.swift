@@ -203,7 +203,7 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     /// Slack authorization endpoint
     public var authorizationEndpoint: String?
 
-    /// Redirect URI registered with the Slack provider
+    /// Redirect URI registered with Slack
     public var redirectURI: String?
 
     /// Requested scopes (space-separated)
@@ -221,7 +221,7 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     ///   - clientID: The Slack  client ID
     ///   - clientSecret: The  Slack client secret
     ///   - redirectURI: The redirect URI registered with Slack
-    ///   - scope: The requested scopes (space-separated)
+    ///   - scopes: The requested scopes
     ///   - logger: Logger used for SlackOAuth2Client operations
     public init(
         httpClient: HTTPClient = .shared,
@@ -243,9 +243,7 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
         self.slackScopes = scopes
 
         // Convert array of scopes to comma-separated string for Slack
-        let scopeString = scopes.joined(separator: ",")
-
-        self.scope = scopeString
+        self.scope = Self.scopesToString(scopes)
     }
 
     /// Exchange an authorization code for tokens with GitHub

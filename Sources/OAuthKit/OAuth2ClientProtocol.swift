@@ -326,10 +326,15 @@ extension OAuth2ClientProtocol {
     }
 
     internal static func getJWKS(httpClient: HTTPClient, jwksURL: String) async throws -> JWKS {
-        let request = HTTPClientRequest(url: jwksURL)
+        var request = HTTPClientRequest(url: jwksURL)
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
         let response = try await httpClient.execute(request, timeout: .seconds(60))
         let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
         return try JSONDecoder().decode(JWKS.self, from: jwks)
+    }
+
+    internal static func scopesToString(_ scopes: [String]) -> String {
+        scopes.joined(separator: ",")
     }
 }
 

@@ -205,7 +205,7 @@ public struct OAuthKit {
         privateKey: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "name email"
+        scopes: [String] = ["name", "email"]
     ) async throws -> AppleOAuthProvider {
         AppleOAuthProvider(
             oauthKit: self,
@@ -216,10 +216,8 @@ public struct OAuthKit {
                 teamID: teamID,
                 keyID: keyID,
                 privateKey: privateKey,
-                tokenEndpoint: AppleOAuthProvider.Endpoints.token,
-                authorizationEndpoint: AppleOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
-                scope: scope,
+                scopes: scopes,
                 jwksURL: AppleOAuthProvider.Endpoints.jwks,
                 logger: logger
             )
