@@ -140,13 +140,13 @@ struct OpenIDConnectTests {
 
         //logger.info("exchange code: \(pp)")
 
-//        let userInfo: UserInfo = try await client.getUserInfo(
-//            accessToken:
-//                "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiJZV1pDMU01aFIwZmhtZVprendZZkRnIiwiZW1haWwiOiJraWxnb3JlQGtpbGdvcmUudHJvdXQiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IktpbGdvcmUgVHJvdXQifQ.DxSh9SVuc8rsXS4V7Z1H46ecyq7Ryb7shkZ8LnilDUADjfrykTyIJ80IzlTOBjOEDddwnlDpBZaguFZP5lLpoPMBMF6mbSZR4JKmppM2jVcXGHpKn0ZTWAZ67Yx0VP4Af1nyCfsNi88GgL2n7pNIWvTrUXFAL0Z8dIo0mB-no3GHY9pFMF__EgBcykTRllKbIud15Rk2jd1v6dQS77cTB-78W0nY3JB8gEm2Vhl9F9FxisA_9RDnmoiNQwo2z5u35JUAtxitUzswlyLahQC3zX2i4iqLTN0VthTThL8E-td6eH3hROtSL8zh89r8s3nAwcLqOF58cjUW3Uu0NQhGIA"
-//        )
-//
-//        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
-//
-//        logger.info("user info: \(userInfo)")
+        //        let userInfo: UserInfo = try await client.getUserInfo(
+        //            accessToken:
+        //                "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiJZV1pDMU01aFIwZmhtZVprendZZkRnIiwiZW1haWwiOiJraWxnb3JlQGtpbGdvcmUudHJvdXQiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IktpbGdvcmUgVHJvdXQifQ.DxSh9SVuc8rsXS4V7Z1H46ecyq7Ryb7shkZ8LnilDUADjfrykTyIJ80IzlTOBjOEDddwnlDpBZaguFZP5lLpoPMBMF6mbSZR4JKmppM2jVcXGHpKn0ZTWAZ67Yx0VP4Af1nyCfsNi88GgL2n7pNIWvTrUXFAL0Z8dIo0mB-no3GHY9pFMF__EgBcykTRllKbIud15Rk2jd1v6dQS77cTB-78W0nY3JB8gEm2Vhl9F9FxisA_9RDnmoiNQwo2z5u35JUAtxitUzswlyLahQC3zX2i4iqLTN0VthTThL8E-td6eH3hROtSL8zh89r8s3nAwcLqOF58cjUW3Uu0NQhGIA"
+        //        )
+        //
+        //        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
+        //
+        //        logger.info("user info: \(userInfo)")
     }
 }
