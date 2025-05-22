@@ -74,7 +74,10 @@ public struct KeyCloakOAuthProvider {
     private let client: OAuth2Client
 
     /// Initialize a new KeyCloak OAuth provider
-    /// - Parameter oauthKit: The OAuthKit instance
+    /// - Parameters:
+    ///   - oauthKit: The OAuthKit instance
+    ///   - endpoints: The Enpoints instance with base url
+    ///   - client: An Oauth2Client
     internal init(
         oauthKit: OAuthKit,
         endpoints: Endpoints,
@@ -309,14 +312,4 @@ public struct KeyCloakUserProfile: Codable {
         case realmAccess = "realm_access"
         case resourceAccess = "resource_access"
     }
-
-    /// Custom claims that don't match predefined properties
-    //private var additionalClaims: [String: AnyCodable]?
-
-    /// Get a specific claim by key
-    /// - Parameter key: The claim key
-    /// - Returns: The claim value as any type, or nil if not found
-    //    public func claim(for key: String) -> Any? {
-    //        additionalClaims?[key]?.value
-    //    }
 }

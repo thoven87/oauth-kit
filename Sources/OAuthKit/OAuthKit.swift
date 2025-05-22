@@ -205,7 +205,7 @@ public struct OAuthKit {
         privateKey: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "name email"
+        scopes: [String] = ["name", "email"]
     ) async throws -> AppleOAuthProvider {
         AppleOAuthProvider(
             oauthKit: self,
@@ -216,10 +216,8 @@ public struct OAuthKit {
                 teamID: teamID,
                 keyID: keyID,
                 privateKey: privateKey,
-                tokenEndpoint: AppleOAuthProvider.Endpoints.token,
-                authorizationEndpoint: AppleOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
-                scope: scope,
+                scopes: scopes,
                 jwksURL: AppleOAuthProvider.Endpoints.jwks,
                 logger: logger
             )
@@ -227,6 +225,11 @@ public struct OAuthKit {
     }
 
     /// Create a Slack OAuth provider for Sign in with Slack
+    /// - Parameters:
+    ///   - clientID: The Slack  client ID
+    ///   - clientSecret: The  Slack client secret
+    ///   - redirectURI: The redirect URI registered with Slack
+    ///   - scopes: The requested scopes
     /// - Returns: A Slack OAuth provider
     public func slackProvider(
         clientID: String,
@@ -240,8 +243,6 @@ public struct OAuthKit {
                 httpClient: httpClient,
                 clientID: clientID,
                 clientSecret: clientSecret,
-                tokenEndpoint: SlackOAuthProvider.Endpoints.token,
-                authorizationEndpoint: SlackOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
                 scopes: scopes
             )
@@ -253,13 +254,13 @@ public struct OAuthKit {
     ///   - appID: The application ID from Facebook
     ///   - appSecret: The application secret from Facebook
     ///   - redirectURI: The redirect URI registered with Facebook
-    ///   - scope: The requested permissions (comma or space-separated)
+    ///   - scopes: The requested permissions
     /// - Returns: A Facebook OAuth provider
     public func facebookProvider(
         appID: String,
         appSecret: String,
         redirectURI: String,
-        scope: String = "email,public_profile"
+        scopes: [String] = ["email", "public_profile"]
     ) -> FacebookOAuthProvider {
         FacebookOAuthProvider(
             oauthKit: self,
@@ -270,7 +271,8 @@ public struct OAuthKit {
                 tokenEndpoint: FacebookOAuthProvider.Endpoints.token,
                 authorizationEndpoint: FacebookOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
-                scope: scope
+                //  (comma or space-separated)
+                scope: scopes.joined(separator: " ")
             )
         )
     }
@@ -281,7 +283,7 @@ public struct OAuthKit {
     ///   - clientID: The client ID from Okta
     ///   - clientSecret: The client secret from Okta
     ///   - redirectURI: The redirect URI registered with Okta
-    ///   - scope: The requested scopes (space-separated)
+    ///   - scopes: The requested scopes
     ///   - useCustomAuth: Whether to use the custom authorization server (default: false)
     ///   - authServerId: The authorization server ID for custom auth server (default: "default")
     /// - Returns: An Okta OAuth provider
@@ -290,7 +292,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "openid profile email offline_access",
+        scopes: [String] = ["openid", "profile", "email", "offline_access"],
         useCustomAuth: Bool = false,
         authServerId: String = "default"
     ) async throws -> OktaOAuthProvider {
@@ -303,7 +305,7 @@ public struct OAuthKit {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scope: scope
+                scope: scopes.joined(separator: " ")
             )
         )
     }
