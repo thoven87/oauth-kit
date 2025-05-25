@@ -85,9 +85,6 @@ struct OpenIDConnectTests {
 
     @Test("Create OpenID Connect Client")
     func testCreateOpenIDConnectClient() async throws {
-        // Wait for Keycloak to be ready before proceeding
-        await waitForKeycloakReadiness()
-
         let client = try await OpenIDConnectClient(
             httpClient: httpClient,
             clientID: clientID,
@@ -122,9 +119,6 @@ struct OpenIDConnectTests {
 
     @Test("Get user info")
     func testCreateOpenIDConnectClientWithCustomLogger() async throws {
-        // Wait for Keycloak to be ready before proceeding
-        await waitForKeycloakReadiness()
-
         let client = try await oauthKit.openIDConnectClient(
             discoveryURL: "\(keycloakURL)/realms/test",
             clientID: clientID,
@@ -157,58 +151,5 @@ struct OpenIDConnectTests {
         //        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
         //
         //        logger.info("user info: \(userInfo)")
-    }
-
-    /// Helper function to wait for Keycloak to be ready
-    private func waitForKeycloakReadiness() async {
-        let maxAttempts = 30
-        let delayBetweenAttempts: UInt64 = 1_000_000_000  // 1 second
-
-        for attempt in 1...maxAttempts {
-            do {
-                var request = HTTPClientRequest(url: "\(keycloakURL)/realms/test/.well-known/openid-configuration")
-                request.method = .GET
-                request.headers.add(name: "Accept", value: "application/json")
-
-                let response = try await httpClient.execute(request, timeout: .seconds(5))
-
-                if response.status == .ok {
-                    // Additional check for JWKS endpoint
-                    var jwksRequest = HTTPClientRequest(url: "\(keycloakURL)/realms/test/protocol/openid-connect/certs")
-                    jwksRequest.method = .GET
-                    jwksRequest.headers.add(name: "Accept", value: "application/json")
-
-                    let jwksResponse = try await httpClient.execute(jwksRequest, timeout: .seconds(5))
-                    if jwksResponse.status == .ok {
-                        logger.info("Keycloak is ready and JWKS endpoint is accessible")
-                        return
-                    }
-                }
-
-                if attempt == maxAttempts {
-                    logger.error("Keycloak is not ready after \(maxAttempts) attempts")
-                    return
-                }
-
-                logger.info("Keycloak not ready yet (attempt \(attempt)/\(maxAttempts)), waiting...")
-                do {
-                    try await Task.sleep(nanoseconds: delayBetweenAttempts)
-                } catch {
-                    logger.warning("Sleep interrupted: \(error)")
-                }
-            } catch {
-                if attempt == maxAttempts {
-                    logger.error("Failed to connect to Keycloak after \(maxAttempts) attempts: \(error)")
-                    return
-                }
-
-                logger.info("Attempt \(attempt)/\(maxAttempts) failed: \(error), retrying...")
-                do {
-                    try await Task.sleep(nanoseconds: delayBetweenAttempts)
-                } catch {
-                    logger.warning("Sleep interrupted: \(error)")
-                }
-            }
-        }
     }
 }

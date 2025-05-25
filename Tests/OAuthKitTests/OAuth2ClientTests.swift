@@ -25,7 +25,7 @@ struct OAuth2ClientTests {
     @Test("Client Creation")
     func testClientCreation() {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
@@ -46,7 +46,7 @@ struct OAuth2ClientTests {
     @Test("Authorization URL Generation")
     func testAuthorizationURLGeneration() throws {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
@@ -90,7 +90,7 @@ struct OAuth2ClientTests {
     @Test("Invalid Authorization Endpoint")
     func testInvalidAuthorizationEndpoint() {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",

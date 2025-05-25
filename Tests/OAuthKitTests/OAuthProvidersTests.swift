@@ -21,7 +21,7 @@ import Testing
 
 @Suite("OAuth Providers Tests")
 struct OAuthProvidersTests {
-    var logger = Logger(label: "provider-test")
+    var logger = Logger(label: "OAuthProvidersTests")
     var oauthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "provider-test"))
 
     private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
