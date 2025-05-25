@@ -125,7 +125,7 @@ struct OpenIDConnectTests {
 
         let result = try client.authorizationURL(state: "hbkfjksdfhjksdfhjksdf")
 
-        #expect(result.hasDirectoryPath)
+        #expect(result.absoluteString.contains("state=hbkfjksdfhjksdfhjksdf"))
 
         //        let validatedToken = try await client.validateIDToken(
         //            "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiI2N1NZMmF5WmNiX0FOVmZJTEJuSUdnIiwiY19oYXNoIjoiV1FvWjBqSEhKOFJnZ1QzLU0wbUlMUSIsImVtYWlsIjoia2lsZ29yZUBraWxnb3JlLnRyb3V0IiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJLaWxnb3JlIFRyb3V0In0.gBQpgE3aZwgy6fnk7vkj6MMUbZDo8_L1Kc-_Ga9kWrYPmbf6Y8hmjtf0jNAFrwBpDtKPMCNGU8TznaoUJwC20VPvrf_nXQk2v4L7BEksBgIcL-sAhtvrT_eRuQ_hsW73iweCQezxvCDr41Pcmz_1T14dEjOL7oiWKzXn-gZn0EwNK627tsACwL-vhE0NZ450m_XBdv-Vn7X1iPvJT8d70gUsMEEEt-tUrzaHFG1sp9hqopaBu9oMfF7-M1GSAfFvyNoAxjP4ZYi-HpHs9GtUI6NNMh5yxxflwtQ99c7XCcRGIBuduBffM_zAjQR3jrVWsS5raTbDXX2AE4s72sa1TA"
