@@ -24,7 +24,7 @@ struct OAuthProvidersTests {
     var logger = Logger(label: "provider-test")
     var oauthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "provider-test"))
 
-    private let dexURL = ProcessInfo.processInfo.environment["DEX_URL"] ?? "http://localhost:8080"
+    private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
     private let redirectURI = "http://localhost:8080/callback"
 
     @Test("Google Provider Creation")
@@ -219,9 +219,9 @@ struct OAuthProvidersTests {
     @Test("KeyCloak Provider Creation")
     func testKeyClockProviderCreation() throws {
         let keycloakProvider = oauthKit.keycloakProvider(
-            endpoints: .init(baseURL: "localhost:8080", realm: "some-realm"),
-            clientID: "some-client-id",
-            clientSecret: "some-client-secret",
+            endpoints: KeyCloakOAuthProvider.Endpoints(baseURL: "http://localhost:8080", realm: "test"),
+            clientID: "example-app",
+            clientSecret: "ZXhhbXBsZS1hcHAtc2VjcmV0",
             redirectURI: redirectURI
         )
         let signInURL = try keycloakProvider.signInURL()

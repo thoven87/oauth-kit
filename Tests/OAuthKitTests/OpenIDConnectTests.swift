@@ -22,11 +22,14 @@ import Testing
 @Suite("OpenID Connect Tests")
 struct OpenIDConnectTests {
     var httpClient = HTTPClient.shared
-    var logger: Logger = Logger(label: "oidc-test")
-    var oauthKit: OAuthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "oidc-test"))
+    var logger: Logger = Logger(label: "OpenIDConnectTests")
+    var oauthKit: OAuthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "OAuthKitTest"))
 
-    private let dexURL = ProcessInfo.processInfo.environment["DEX_URL"] ?? "http://localhost:5556"
+    private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
     private let redirectURI = "http://localhost:8080/callback"
+
+    private let clientID = ProcessInfo.processInfo.environment["KEYCLOAK_CLIENT_ID"] ?? "example-app"
+    private let clientSecret = ProcessInfo.processInfo.environment["KEYCLOAK_CLIENT_SECRET"] ?? "ZXhhbXBsZS1hcHAtc2VjcmV0"
 
     @Test("Address Claim Creation")
     func testAddressClaimCreation() {
@@ -82,21 +85,24 @@ struct OpenIDConnectTests {
 
     @Test("Create OpenID Connect Client")
     func testCreateOpenIDConnectClient() async throws {
+        // Wait for Keycloak to be ready before proceeding
+        await waitForKeycloakReadiness()
+
         let client = try await OpenIDConnectClient(
             httpClient: httpClient,
-            clientID: "test-client-id",
-            clientSecret: "test-client-secret",
+            clientID: clientID,
+            clientSecret: clientSecret,
             configuration: OpenIDConfiguration(
-                authorizationEndpoint: "\(dexURL)/dex/auth",
-                tokenEndpoint: "\(dexURL)/dex/token",
-                userinfoEndpoint: "\(dexURL)/dex/userinfo",
-                jwksUri: "\(dexURL)/dex/keys",
+                authorizationEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/auth",
+                tokenEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/token",
+                userinfoEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/userinfo",
+                jwksUri: "\(keycloakURL)/realms/test/protocol/openid-connect/certs",
                 scopesSupported: ["openid", "profile", "email"],
                 responseTypesSupported: ["code"],
                 grantTypesSupported: ["authorization_code", "refresh_token"],
                 subjectTypesSupported: ["public"],
                 idTokenSigningAlgValuesSupported: ["RS256"],
-                issuer: dexURL,
+                issuer: "\(keycloakURL)/realms/test",
                 endSessionEndpoint: nil,
                 introspectionEndpoint: nil,
                 revocationEndpoint: nil
@@ -106,20 +112,23 @@ struct OpenIDConnectTests {
             logger: logger
         )
 
-        #expect(client.clientID == "test-client-id")
-        #expect(client.clientSecret == "test-client-secret")
+        #expect(client.clientID == clientID)
+        #expect(client.clientSecret == clientSecret)
         #expect(client.redirectURI == "https://example.com/callback")
         #expect(client.scope == "openid profile email")
-        #expect(client.configuration.authorizationEndpoint == "\(dexURL)/dex/auth")
-        #expect(client.configuration.tokenEndpoint == "\(dexURL)/dex/token")
+        #expect(client.configuration.authorizationEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/auth")
+        #expect(client.configuration.tokenEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/token")
     }
 
     @Test("Get user info")
     func testCreateOpenIDConnectClientWithCustomLogger() async throws {
+        // Wait for Keycloak to be ready before proceeding
+        await waitForKeycloakReadiness()
+
         let client = try await oauthKit.openIDConnectClient(
-            discoveryURL: "\(dexURL)/dex",
-            clientID: "example-app",
-            clientSecret: "ZXhhbXBsZS1hcHAtc2VjcmV0",
+            discoveryURL: "\(keycloakURL)/realms/test",
+            clientID: clientID,
+            clientSecret: clientSecret,
             redirectURI: "http://localhost:5555/callback"
         )
 
@@ -148,5 +157,58 @@ struct OpenIDConnectTests {
         //        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
         //
         //        logger.info("user info: \(userInfo)")
+    }
+
+    /// Helper function to wait for Keycloak to be ready
+    private func waitForKeycloakReadiness() async {
+        let maxAttempts = 30
+        let delayBetweenAttempts: UInt64 = 1_000_000_000  // 1 second
+
+        for attempt in 1...maxAttempts {
+            do {
+                var request = HTTPClientRequest(url: "\(keycloakURL)/realms/test/.well-known/openid-configuration")
+                request.method = .GET
+                request.headers.add(name: "Accept", value: "application/json")
+
+                let response = try await httpClient.execute(request, timeout: .seconds(5))
+
+                if response.status == .ok {
+                    // Additional check for JWKS endpoint
+                    var jwksRequest = HTTPClientRequest(url: "\(keycloakURL)/realms/test/protocol/openid-connect/certs")
+                    jwksRequest.method = .GET
+                    jwksRequest.headers.add(name: "Accept", value: "application/json")
+
+                    let jwksResponse = try await httpClient.execute(jwksRequest, timeout: .seconds(5))
+                    if jwksResponse.status == .ok {
+                        logger.info("Keycloak is ready and JWKS endpoint is accessible")
+                        return
+                    }
+                }
+
+                if attempt == maxAttempts {
+                    logger.error("Keycloak is not ready after \(maxAttempts) attempts")
+                    return
+                }
+
+                logger.info("Keycloak not ready yet (attempt \(attempt)/\(maxAttempts)), waiting...")
+                do {
+                    try await Task.sleep(nanoseconds: delayBetweenAttempts)
+                } catch {
+                    logger.warning("Sleep interrupted: \(error)")
+                }
+            } catch {
+                if attempt == maxAttempts {
+                    logger.error("Failed to connect to Keycloak after \(maxAttempts) attempts: \(error)")
+                    return
+                }
+
+                logger.info("Attempt \(attempt)/\(maxAttempts) failed: \(error), retrying...")
+                do {
+                    try await Task.sleep(nanoseconds: delayBetweenAttempts)
+                } catch {
+                    logger.warning("Sleep interrupted: \(error)")
+                }
+            }
+        }
     }
 }
