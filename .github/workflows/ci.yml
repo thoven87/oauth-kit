@@ -22,15 +22,15 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
     env:
       KEYCLOAK_URL: http://localhost:8080
       OIDC_ISSUER_URL: http://localhost:8080/realms/test
-      
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Start Keycloak
         run: |
           docker run -d --name keycloak -p 8080:8080 \
@@ -40,7 +40,7 @@ jobs:
             -e KC_HTTP_ENABLED=true \
             -e KC_HEALTH_ENABLED=true \
             quay.io/keycloak/keycloak:latest start-dev
-            
+
       - name: Configure Keycloak
         run: |
           echo "Waiting for Keycloak..."
@@ -48,20 +48,21 @@ jobs:
             echo "..."
             sleep 3
           done
-          
+
           ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8080/realms/master/protocol/openid-connect/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "username=admin&password=admin&grant_type=password&client_id=admin-cli" | \
             grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
-          
+
           curl -X POST "http://localhost:8080/admin/realms" \
             -H "Authorization: Bearer $ADMIN_TOKEN" \
             -H "Content-Type: application/json" \
             -d @infra/keycloak-realm.json
-          
+
           echo "Keycloak ready!"
-          
-      - name: Build and test
+
+      - name: Build
+        run: swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors -Xcc -Werror --sanitize address --disable-xctest
+      - name: Run Tests
         run: |
-          swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors -Xcc -Werror --sanitize address --disable-xctest
           swift test --skip-build --configuration debug --disable-xctest
