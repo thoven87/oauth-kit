@@ -20,7 +20,7 @@ import Testing
 
 @Suite("OAuth2 Client Tests")
 struct OAuth2ClientTests {
-    let logger = Logger(label: "oauth-test")
+    let logger = Logger(label: "OAuth2ClientTests")
 
     @Test("Client Creation")
     func testClientCreation() {

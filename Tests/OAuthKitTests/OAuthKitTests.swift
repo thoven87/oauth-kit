@@ -21,12 +21,11 @@ import Testing
 
 @Suite("OAuthKit Core Tests")
 struct OAuthKitTests {
-    var logger = Logger(label: "OAuthKitTests")
-
+    static let logger = Logger(label: "OAuthKitTests")
+    let oauthKit = OAuthKit(httpClient: .shared, logger: logger)
+    
     @Test("OAuth2 Client Creation")
     func testOAuth2ClientCreation() {
-        let oauthKit = OAuthKit(httpClient: .shared, logger: logger)
-
         let client = oauthKit.oauth2Client(
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
@@ -55,8 +54,6 @@ struct OAuthKitTests {
 
     @Test("Authorization URL Generation")
     func testAuthorizationURLGeneration() throws {
-        let oauthKit = OAuthKit(httpClient: .shared, logger: logger)
-
         let client = oauthKit.oauth2Client(
             clientID: "test-client-id",
             clientSecret: "test-client-secret",

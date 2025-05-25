@@ -21,9 +21,8 @@ import Testing
 
 @Suite("OpenID Connect Tests")
 struct OpenIDConnectTests {
-    var httpClient = HTTPClient.shared
     var logger: Logger = Logger(label: "OpenIDConnectTests")
-    var oauthKit: OAuthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "OAuthKitTest"))
+    var oauthKit: OAuthKit = OAuthKit(httpClient: .shared, logger: Logger(label: "OAuthKitTest"))
 
     private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
     private let redirectURI = "http://localhost:8080/callback"
@@ -86,7 +85,7 @@ struct OpenIDConnectTests {
     @Test("Create OpenID Connect Client")
     func testCreateOpenIDConnectClient() async throws {
         let client = try await OpenIDConnectClient(
-            httpClient: httpClient,
+            httpClient: .shared,
             clientID: clientID,
             clientSecret: clientSecret,
             configuration: OpenIDConfiguration(
