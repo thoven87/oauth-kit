@@ -36,10 +36,44 @@ jobs:
         ports:
           - 5556:5556
         volumes:
-          - ${{ github.workspace }}/build/volume/oauth-kit/infra/config.yaml:/etc/dex/config.yaml:ro
+          - ${{ github.workspace }}/infra/config.yaml:/etc/dex/config.yaml:ro
+        env:
+          DEX_ISSUER_URL: http://dex:5556/dex
+        options: >-
+          --health-cmd "curl -f http://localhost:5556/dex/.well-known/openid-configuration || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Wait for Dex to be ready
+        run: |
+          echo "Waiting for Dex to be ready..."
+          max_attempts=30
+          attempt=0
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f http://dex:5556/dex/.well-known/openid-configuration > /dev/null 2>&1; then
+              echo "Dex is ready!"
+              break
+            fi
+            echo "Attempt $((attempt + 1))/$max_attempts: Dex not ready yet, waiting..."
+            sleep 2
+            attempt=$((attempt + 1))
+          done
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "Dex failed to become ready after $max_attempts attempts"
+            exit 1
+          fi
+          
+          # Additional verification - check JWKS endpoint
+          echo "Verifying JWKS endpoint..."
+          if curl -f http://dex:5556/dex/keys > /dev/null 2>&1; then
+            echo "JWKS endpoint is accessible!"
+          else
+            echo "Warning: JWKS endpoint not accessible, but continuing..."
+          fi
       - name: Build
         run: swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors -Xcc -Werror --sanitize address --disable-xctest
       - name: Run Tests
@@ -47,3 +81,4 @@ jobs:
           swift test --skip-build --configuration debug --disable-xctest
         env:
           DEX_URL: http://dex:5556
+          DEX_ISSUER_URL: http://dex:5556/dex
