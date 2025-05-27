@@ -104,14 +104,14 @@ struct OpenIDConnectTests {
                 revocationEndpoint: nil
             ),
             redirectURI: "https://example.com/callback",
-            scope: "openid profile email",
+            scopes: ["openid", "profile", "email"],
             logger: logger
         )
 
         #expect(client.clientID == clientID)
         #expect(client.clientSecret == clientSecret)
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "openid profile email")
+        #expect(client.scopes == ["openid", "profile", "email"])
         #expect(client.configuration.authorizationEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/auth")
         #expect(client.configuration.tokenEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/token")
     }

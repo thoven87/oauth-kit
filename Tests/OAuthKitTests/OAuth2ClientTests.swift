@@ -31,7 +31,7 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 
@@ -40,7 +40,7 @@ struct OAuth2ClientTests {
         #expect(client.tokenEndpoint == "https://example.com/token")
         #expect(client.authorizationEndpoint == "https://example.com/auth")
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "test-scope")
+        #expect(client.scopes.contains("test-scope"))
     }
 
     @Test("Authorization URL Generation")
@@ -52,7 +52,7 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 
@@ -96,7 +96,7 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: nil,
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 

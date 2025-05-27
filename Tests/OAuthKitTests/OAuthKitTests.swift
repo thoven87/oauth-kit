@@ -32,7 +32,7 @@ struct OAuthKitTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/authorize",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope"
+            scopes: ["test-scope"]
         )
 
         #expect(client.clientID == "test-client-id")
@@ -40,7 +40,7 @@ struct OAuthKitTests {
         #expect(client.tokenEndpoint == "https://example.com/token")
         #expect(client.authorizationEndpoint == "https://example.com/authorize")
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "test-scope")
+        #expect(client.scopes.contains("test-scope"))
     }
 
     @Test("PKCE Generation")
@@ -60,7 +60,7 @@ struct OAuthKitTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/authorize",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope"
+            scopes: ["test-scope"]
         )
 
         let url = try client.authorizationURL(state: "test-state")
