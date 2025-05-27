@@ -14,10 +14,11 @@
 
 import AsyncHTTPClient
 import Foundation
+import JWTKit
 import NIOFoundationCompat
 
 /// Provider for Google OAuth2/OpenID Connect authentication
-public struct GoogleOAuthProvider {
+public struct GoogleOAuthProvider: Sendable {
     /// Google's OAuth2/OIDC discovery URL
     public static let discoveryURL = "https://accounts.google.com/"
 
@@ -109,8 +110,8 @@ public struct GoogleOAuthProvider {
     /// - Returns: The user's Google profile information
     public func getUserProfile(
         accessToken: String
-    ) async throws -> GoogleUserProfile {
-        let userInfo: GoogleUserProfile = try await client.getUserInfo(accessToken: accessToken)
+    ) async throws -> GoogleIdentityToken {
+        let userInfo: GoogleIdentityToken = try await client.getUserInfo(accessToken: accessToken)
         return userInfo
     }
 }
@@ -125,42 +126,4 @@ public enum GooglePrompt: String {
 
     /// Always show the account selection page
     case selectAccount = "select_account"
-}
-
-/// Google user profile information
-public struct GoogleUserProfile: Codable {
-    /// The user's unique Google ID
-    public let id: String
-
-    /// The user's email address
-    public let email: String?
-
-    /// Whether the user's email address is verified
-    public let emailVerified: Bool?
-
-    /// The user's full name
-    public let name: String?
-
-    /// The user's given name
-    public let givenName: String?
-
-    /// The user's family name
-    public let familyName: String?
-
-    /// The user's profile picture URL
-    public let picture: String?
-
-    /// The user's locale
-    public let locale: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id = "sub"
-        case email
-        case emailVerified = "email_verified"
-        case name
-        case givenName = "given_name"
-        case familyName = "family_name"
-        case picture
-        case locale
-    }
 }

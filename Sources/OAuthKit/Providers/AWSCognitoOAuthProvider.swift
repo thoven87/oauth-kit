@@ -116,8 +116,8 @@ public struct AWSCognitoOAuthProvider {
             ]
 
             // Optional parameters
-            if !client.scope.isEmpty {
-                queryItems.append(URLQueryItem(name: "scope", value: client.scope))
+            if !client.scopes.isEmpty {
+                queryItems.append(URLQueryItem(name: "scope", value: client.scopes.joined(separator: " ")))
             }
 
             if let state = state {

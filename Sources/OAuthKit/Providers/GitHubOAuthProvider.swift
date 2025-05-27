@@ -18,7 +18,7 @@ import Logging
 import NIOFoundationCompat
 
 /// Provider for GitHub OAuth authentication
-public struct GitHubOAuthProvider {
+public struct GitHubOAuthProvider: Sendable {
     /// GitHub's OAuth2 endpoints
     public struct Endpoints {
         /// The authorization endpoint URL

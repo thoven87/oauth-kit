@@ -20,18 +20,18 @@ import Testing
 
 @Suite("OAuth2 Client Tests")
 struct OAuth2ClientTests {
-    let logger = Logger(label: "oauth-test")
+    let logger = Logger(label: "OAuth2ClientTests")
 
     @Test("Client Creation")
     func testClientCreation() {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 
@@ -40,19 +40,19 @@ struct OAuth2ClientTests {
         #expect(client.tokenEndpoint == "https://example.com/token")
         #expect(client.authorizationEndpoint == "https://example.com/auth")
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "test-scope")
+        #expect(client.scopes.contains("test-scope"))
     }
 
     @Test("Authorization URL Generation")
     func testAuthorizationURLGeneration() throws {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 
@@ -90,13 +90,13 @@ struct OAuth2ClientTests {
     @Test("Invalid Authorization Endpoint")
     func testInvalidAuthorizationEndpoint() {
         let client = OAuth2Client(
-            httpClient: HTTPClient.shared,
+            httpClient: .shared,
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: nil,
             redirectURI: "https://example.com/callback",
-            scope: "test-scope",
+            scopes: ["test-scope"],
             logger: logger
         )
 

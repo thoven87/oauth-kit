@@ -21,20 +21,18 @@ import Testing
 
 @Suite("OAuthKit Core Tests")
 struct OAuthKitTests {
-    var httpClient = HTTPClient.shared
-    var logger = Logger(label: "oauth-test")
+    static let logger = Logger(label: "OAuthKitTests")
+    let oauthKit = OAuthKit(httpClient: .shared, logger: logger)
 
     @Test("OAuth2 Client Creation")
     func testOAuth2ClientCreation() {
-        let oauthKit = OAuthKit(httpClient: httpClient, logger: logger)
-
         let client = oauthKit.oauth2Client(
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/authorize",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope"
+            scopes: ["test-scope"]
         )
 
         #expect(client.clientID == "test-client-id")
@@ -42,7 +40,7 @@ struct OAuthKitTests {
         #expect(client.tokenEndpoint == "https://example.com/token")
         #expect(client.authorizationEndpoint == "https://example.com/authorize")
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "test-scope")
+        #expect(client.scopes.contains("test-scope"))
     }
 
     @Test("PKCE Generation")
@@ -56,15 +54,13 @@ struct OAuthKitTests {
 
     @Test("Authorization URL Generation")
     func testAuthorizationURLGeneration() throws {
-        let oauthKit = OAuthKit(httpClient: httpClient, logger: logger)
-
         let client = oauthKit.oauth2Client(
             clientID: "test-client-id",
             clientSecret: "test-client-secret",
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/authorize",
             redirectURI: "https://example.com/callback",
-            scope: "test-scope"
+            scopes: ["test-scope"]
         )
 
         let url = try client.authorizationURL(state: "test-state")

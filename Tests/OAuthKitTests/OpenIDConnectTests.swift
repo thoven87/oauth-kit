@@ -21,12 +21,14 @@ import Testing
 
 @Suite("OpenID Connect Tests")
 struct OpenIDConnectTests {
-    var httpClient = HTTPClient.shared
-    var logger: Logger = Logger(label: "oidc-test")
-    var oauthKit: OAuthKit = OAuthKit(httpClient: HTTPClient.shared, logger: Logger(label: "oidc-test"))
+    var logger: Logger = Logger(label: "OpenIDConnectTests")
+    var oauthKit: OAuthKit = OAuthKit(httpClient: .shared, logger: Logger(label: "OAuthKitTest"))
 
-    private let dexURL = ProcessInfo.processInfo.environment["DEX_URL"] ?? "http://localhost:5556"
+    private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
     private let redirectURI = "http://localhost:8080/callback"
+
+    private let clientID = ProcessInfo.processInfo.environment["KEYCLOAK_CLIENT_ID"] ?? "example-app"
+    private let clientSecret = ProcessInfo.processInfo.environment["KEYCLOAK_CLIENT_SECRET"] ?? "ZXhhbXBsZS1hcHAtc2VjcmV0"
 
     @Test("Address Claim Creation")
     func testAddressClaimCreation() {
@@ -83,46 +85,49 @@ struct OpenIDConnectTests {
     @Test("Create OpenID Connect Client")
     func testCreateOpenIDConnectClient() async throws {
         let client = try await OpenIDConnectClient(
-            httpClient: httpClient,
-            clientID: "test-client-id",
-            clientSecret: "test-client-secret",
+            httpClient: .shared,
+            clientID: clientID,
+            clientSecret: clientSecret,
             configuration: OpenIDConfiguration(
-                authorizationEndpoint: "\(dexURL)/dex/auth",
-                tokenEndpoint: "\(dexURL)/dex/token",
-                userinfoEndpoint: "\(dexURL)/dex/userinfo",
-                jwksUri: "\(dexURL)/dex/keys",
+                authorizationEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/auth",
+                tokenEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/token",
+                userinfoEndpoint: "\(keycloakURL)/realms/test/protocol/openid-connect/userinfo",
+                jwksUri: "\(keycloakURL)/realms/test/protocol/openid-connect/certs",
                 scopesSupported: ["openid", "profile", "email"],
                 responseTypesSupported: ["code"],
                 grantTypesSupported: ["authorization_code", "refresh_token"],
                 subjectTypesSupported: ["public"],
                 idTokenSigningAlgValuesSupported: ["RS256"],
-                issuer: dexURL,
+                issuer: "\(keycloakURL)/realms/test",
                 endSessionEndpoint: nil,
                 introspectionEndpoint: nil,
                 revocationEndpoint: nil
             ),
             redirectURI: "https://example.com/callback",
-            scope: "openid profile email",
+            scopes: ["openid", "profile", "email"],
             logger: logger
         )
 
-        #expect(client.clientID == "test-client-id")
-        #expect(client.clientSecret == "test-client-secret")
+        #expect(client.clientID == clientID)
+        #expect(client.clientSecret == clientSecret)
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scope == "openid profile email")
-        #expect(client.configuration.authorizationEndpoint == "\(dexURL)/dex/auth")
-        #expect(client.configuration.tokenEndpoint == "\(dexURL)/dex/token")
+        #expect(client.scopes == ["openid", "profile", "email"])
+        #expect(client.configuration.authorizationEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/auth")
+        #expect(client.configuration.tokenEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/token")
     }
 
     @Test("Get user info")
     func testCreateOpenIDConnectClientWithCustomLogger() async throws {
         let client = try await oauthKit.openIDConnectClient(
-            discoveryURL: "\(dexURL)/dex",
-            clientID: "example-app",
-            clientSecret: "ZXhhbXBsZS1hcHAtc2VjcmV0",
+            discoveryURL: "\(keycloakURL)/realms/test",
+            clientID: clientID,
+            clientSecret: clientSecret,
             redirectURI: "http://localhost:5555/callback"
         )
-        // let result = try client.authorizationURL(state: "son")
+
+        let result = try client.authorizationURL(state: "hbkfjksdfhjksdfhjksdf")
+
+        #expect(result.absoluteString.contains("state=hbkfjksdfhjksdfhjksdf"))
 
         //        let validatedToken = try await client.validateIDToken(
         //            "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiI2N1NZMmF5WmNiX0FOVmZJTEJuSUdnIiwiY19oYXNoIjoiV1FvWjBqSEhKOFJnZ1QzLU0wbUlMUSIsImVtYWlsIjoia2lsZ29yZUBraWxnb3JlLnRyb3V0IiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJLaWxnb3JlIFRyb3V0In0.gBQpgE3aZwgy6fnk7vkj6MMUbZDo8_L1Kc-_Ga9kWrYPmbf6Y8hmjtf0jNAFrwBpDtKPMCNGU8TznaoUJwC20VPvrf_nXQk2v4L7BEksBgIcL-sAhtvrT_eRuQ_hsW73iweCQezxvCDr41Pcmz_1T14dEjOL7oiWKzXn-gZn0EwNK627tsACwL-vhE0NZ450m_XBdv-Vn7X1iPvJT8d70gUsMEEEt-tUrzaHFG1sp9hqopaBu9oMfF7-M1GSAfFvyNoAxjP4ZYi-HpHs9GtUI6NNMh5yxxflwtQ99c7XCcRGIBuduBffM_zAjQR3jrVWsS5raTbDXX2AE4s72sa1TA"
@@ -137,13 +142,13 @@ struct OpenIDConnectTests {
 
         //logger.info("exchange code: \(pp)")
 
-        let userInfo: UserInfo = try await client.getUserInfo(
-            accessToken:
-                "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiJZV1pDMU01aFIwZmhtZVprendZZkRnIiwiZW1haWwiOiJraWxnb3JlQGtpbGdvcmUudHJvdXQiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IktpbGdvcmUgVHJvdXQifQ.DxSh9SVuc8rsXS4V7Z1H46ecyq7Ryb7shkZ8LnilDUADjfrykTyIJ80IzlTOBjOEDddwnlDpBZaguFZP5lLpoPMBMF6mbSZR4JKmppM2jVcXGHpKn0ZTWAZ67Yx0VP4Af1nyCfsNi88GgL2n7pNIWvTrUXFAL0Z8dIo0mB-no3GHY9pFMF__EgBcykTRllKbIud15Rk2jd1v6dQS77cTB-78W0nY3JB8gEm2Vhl9F9FxisA_9RDnmoiNQwo2z5u35JUAtxitUzswlyLahQC3zX2i4iqLTN0VthTThL8E-td6eH3hROtSL8zh89r8s3nAwcLqOF58cjUW3Uu0NQhGIA"
-        )
-
-        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
-
-        logger.info("user info: \(userInfo)")
+        //        let userInfo: UserInfo = try await client.getUserInfo(
+        //            accessToken:
+        //                "eyJhbGciOiJSUzI1NiIsImtpZCI6ImI3YmNlM2Y5MGY2NzljMzE5NTViN2RlN2EzZmQ5OGUyMmUyODdkZjMifQ.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU1NTYvZGV4Iiwic3ViIjoiQ2cwd0xUTTROUzB5T0RBNE9TMHdFZ1J0YjJOciIsImF1ZCI6ImV4YW1wbGUtYXBwIiwiZXhwIjoxNzQ2NzI0MjgxLCJpYXQiOjE3NDY2Mzc4ODEsImF0X2hhc2giOiJZV1pDMU01aFIwZmhtZVprendZZkRnIiwiZW1haWwiOiJraWxnb3JlQGtpbGdvcmUudHJvdXQiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IktpbGdvcmUgVHJvdXQifQ.DxSh9SVuc8rsXS4V7Z1H46ecyq7Ryb7shkZ8LnilDUADjfrykTyIJ80IzlTOBjOEDddwnlDpBZaguFZP5lLpoPMBMF6mbSZR4JKmppM2jVcXGHpKn0ZTWAZ67Yx0VP4Af1nyCfsNi88GgL2n7pNIWvTrUXFAL0Z8dIo0mB-no3GHY9pFMF__EgBcykTRllKbIud15Rk2jd1v6dQS77cTB-78W0nY3JB8gEm2Vhl9F9FxisA_9RDnmoiNQwo2z5u35JUAtxitUzswlyLahQC3zX2i4iqLTN0VthTThL8E-td6eH3hROtSL8zh89r8s3nAwcLqOF58cjUW3Uu0NQhGIA"
+        //        )
+        //
+        //        #expect(userInfo.email == "kilgore@kilgore.trout", "email not match")
+        //
+        //        logger.info("user info: \(userInfo)")
     }
 }

@@ -33,6 +33,9 @@ public struct AppleOAuthProvider {
 
         /// The JSON Web Key Set endpoint URL
         public static let jwks = "https://appleid.apple.com/auth/keys"
+
+        /// The Issuer URL
+        public static let issuer = "https://appleid.apple.com"
     }
 
     /// The OAuthKit instance
@@ -70,7 +73,7 @@ public struct AppleOAuthProvider {
 
         // Generate PKCE if requested
         if usePKCE {
-            let pkce = OAuth2Client.generatePKCE()
+            let pkce = AppleOAuth2Client.generatePKCE()
             codeVerifier = pkce.codeVerifier
             codeChallenge = pkce.codeChallenge
         }
@@ -98,9 +101,6 @@ public struct AppleOAuthProvider {
         code: String,
         codeVerifier: String? = nil
     ) async throws -> TokenResponse {
-        //        guard let appleClient = client else {
-        //            throw OAuth2Error.configurationError("Client must be created with AppleOAuthProvider.createClient")
-        //        }
 
         let parameters = [
             "client_secret": "YOUR_CLIENT_SECRET"
@@ -171,7 +171,30 @@ public struct AppleOAuthProvider {
 }
 
 /// Apple-specific OAuth2 client that generates a JWT client secret automatically
-public class AppleOAuth2Client: OAuth2Client {
+public struct AppleOAuth2Client: OAuth2ClientProtocol {
+    /// HTTP client for making requests
+    public var httpClient: AsyncHTTPClient.HTTPClient
+
+    /// Apple client ID
+    public var clientID: String
+
+    /// Apple client secret
+    public var clientSecret: String
+
+    /// Apple token enpoint
+    public var tokenEndpoint: String
+
+    /// Apple Autherization Endpoint
+    public var authorizationEndpoint: String?
+
+    /// Redirect URI registered with Apple
+    public var redirectURI: String?
+
+    /// Requested scopes
+    public var scopes: [String]
+
+    /// Logger used for AppleOAuth2Client operations
+    public var logger: Logging.Logger
 
     /// The Team ID from Apple Developer portal
     private let teamID: String
@@ -189,20 +212,29 @@ public class AppleOAuth2Client: OAuth2Client {
     let jwtKeys: JWTKeyCollection
 
     /// Initialize a new Apple OAuth2 client
+    ///
     public init(
-        httpClient: HTTPClient,
+        httpClient: HTTPClient = HTTPClient.shared,
         clientID: String,
         clientSecret: String,
         teamID: String,
         keyID: String,
         privateKey: String,
-        tokenEndpoint: String,
-        authorizationEndpoint: String? = nil,
         redirectURI: String? = nil,
-        scope: String = "",
+        scopes: [String] = [],
         jwksURL: String,
-        logger: Logger
+        logger: Logger = Logger(label: "com.oauthkit.AppleOAuth2Client")
     ) async throws {
+
+        self.httpClient = httpClient
+        self.clientID = clientID
+        self.clientSecret = clientSecret
+        self.tokenEndpoint = AppleOAuthProvider.Endpoints.token
+        self.authorizationEndpoint = AppleOAuthProvider.Endpoints.authorization
+        self.redirectURI = redirectURI
+        self.scopes = scopes
+        self.logger = logger
+
         self.teamID = teamID
         self.keyID = keyID
         self.privateKey = privateKey
@@ -210,16 +242,6 @@ public class AppleOAuth2Client: OAuth2Client {
         self.jwtKeys = try await JWTKeyCollection()
             .add(ecdsa: ES256PrivateKey(pem: privateKey), kid: self.jwkIdentifier)
             .add(jwks: try await Self.getJWKS(httpClient: httpClient, jwksURL: jwksURL))
-        super.init(
-            httpClient: httpClient,
-            clientID: clientID,
-            clientSecret: clientSecret,
-            tokenEndpoint: tokenEndpoint,
-            authorizationEndpoint: authorizationEndpoint,
-            redirectURI: redirectURI,
-            scope: scope,
-            logger: logger
-        )
     }
 
     /// Override to generate a JWT client secret for every token request
@@ -265,21 +287,16 @@ public class AppleOAuth2Client: OAuth2Client {
         }
 
         func verify(using algorithm: some JWTAlgorithm) async throws {
-            guard iss.value.count == 10 else {
-                throw JWTError.claimVerificationFailure(
-                    failedClaim: iss,
-                    reason: "Team ID must be exactly 10 characters long"
-                )
+            if iat.value > exp.value {
+                throw OAuth2Error.tokenValidationError("Token expired")
             }
-
-            let lifetime = Int(exp.value.timeIntervalSinceReferenceDate - iat.value.timeIntervalSinceReferenceDate)
-
-            guard 0...15_777_000 ~= lifetime else {
-                throw JWTError.claimVerificationFailure(
-                    failedClaim: exp,
-                    reason: "Token lifetime must be between 0 and 180 days"
-                )
+            if iat.value > Date.now {
+                throw OAuth2Error.tokenValidationError("Token issued in future")
             }
+            if iss.value != AppleOAuthProvider.Endpoints.issuer {
+                throw OAuth2Error.tokenValidationError("Unexpected issuer")
+            }
+            try exp.verifyNotExpired()
         }
     }
 }

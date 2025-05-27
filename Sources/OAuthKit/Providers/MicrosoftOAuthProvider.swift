@@ -18,7 +18,7 @@ import Logging
 import NIOFoundationCompat
 
 /// Provider for Microsoft OAuth2/OpenID Connect authentication
-public struct MicrosoftOAuthProvider {
+public struct MicrosoftOAuthProvider: Sendable {
     /// Microsoft's common (multi-tenant) OAuth2/OIDC discovery URL
     public static let commonDiscoveryURL = "https://login.microsoftonline.com/common/v2.0/"
 
