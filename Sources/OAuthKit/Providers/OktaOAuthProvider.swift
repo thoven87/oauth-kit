@@ -18,7 +18,7 @@ import NIOCore
 import NIOFoundationCompat
 
 /// Provider for Okta OAuth2/OpenID Connect authentication
-public struct OktaOAuthProvider {
+public struct OktaOAuthProvider: Sendable {
     /// The OAuthKit instance
     private let oauthKit: OAuthKit
 

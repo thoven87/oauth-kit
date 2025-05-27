@@ -206,14 +206,11 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     /// Redirect URI registered with Slack
     public var redirectURI: String?
 
-    /// Requested scopes (space-separated)
-    public var scope: String
+    /// Requested scopes
+    public var scopes: [String]
 
     /// Logger used for SlackOAuth2Client operations
     public var logger: Logging.Logger
-
-    /// The scopes requested for Slack (array of strings)
-    private let slackScopes: [String]
 
     /// Initialize a new SlackOAuth2Client client
     /// - Parameters:
@@ -239,11 +236,7 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
         self.authorizationEndpoint = SlackOAuthProvider.Endpoints.authorization
         self.redirectURI = redirectURI
         self.logger = logger
-
-        self.slackScopes = scopes
-
-        // Convert array of scopes to comma-separated string for Slack
-        self.scope = Self.scopesToString(scopes)
+        self.scopes = scopes
     }
 
     /// Exchange an authorization code for tokens with GitHub

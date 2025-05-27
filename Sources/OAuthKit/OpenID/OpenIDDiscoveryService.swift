@@ -54,28 +54,46 @@ public struct OpenIDDiscoveryService {
 
         logger.debug("Discovering OpenID configuration at: \(discoveryURL)")
 
-        var request = HTTPClientRequest(url: discoveryURL)
-        request.method = .GET
-        request.headers.add(name: "Accept", value: "application/json")
-        request.headers.add(name: "User-Agent", value: USER_AGENT)
+        // Retry configuration for CI environments where services might not be immediately ready
+        let maxRetries = 5
+        let baseDelay: UInt64 = 1_000_000_000  // 1 second in nanoseconds
 
-        do {
-            let response = try await httpClient.execute(request, timeout: .seconds(60))
+        for attempt in 1...maxRetries {
+            var request = HTTPClientRequest(url: discoveryURL)
+            request.method = .GET
+            request.headers.add(name: "Accept", value: "application/json")
+            request.headers.add(name: "User-Agent", value: USER_AGENT)
 
-            guard response.status == .ok else {
-                logger.error("OpenID discovery failed with status: \(response.status)")
-                throw OAuth2Error.openIDConfigError("Discovery request failed with status: \(response.status)")
+            do {
+                let response = try await httpClient.execute(request, timeout: .seconds(60))
+
+                guard response.status == .ok else {
+                    if attempt == maxRetries {
+                        logger.error("OpenID discovery failed with status: \(response.status) after \(maxRetries) attempts")
+                        throw OAuth2Error.openIDConfigError("Discovery request failed with status: \(response.status)")
+                    }
+                    logger.warning("OpenID discovery attempt \(attempt)/\(maxRetries) failed with status: \(response.status), retrying...")
+                    try await Task.sleep(nanoseconds: baseDelay * UInt64(attempt))
+                    continue
+                }
+
+                let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+
+                let decoder = JSONDecoder()
+                return try decoder.decode(OpenIDConfiguration.self, from: responseBody)
+            } catch let error as OAuth2Error {
+                throw error
+            } catch {
+                if attempt == maxRetries {
+                    logger.error("OpenID discovery failed with error: \(error) after \(maxRetries) attempts")
+                    throw OAuth2Error.openIDConfigError("Discovery request failed: \(error)")
+                }
+                logger.warning("OpenID discovery attempt \(attempt)/\(maxRetries) failed with error: \(error), retrying...")
+                try await Task.sleep(nanoseconds: baseDelay * UInt64(attempt))
             }
-
-            let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-
-            let decoder = JSONDecoder()
-            return try decoder.decode(OpenIDConfiguration.self, from: responseBody)
-        } catch let error as OAuth2Error {
-            throw error
-        } catch {
-            logger.error("OpenID discovery failed with error: \(error)")
-            throw OAuth2Error.openIDConfigError("Discovery request failed: \(error)")
         }
+
+        // This should never be reached due to the logic above, but Swift requires it
+        throw OAuth2Error.openIDConfigError("Discovery failed after all retry attempts")
     }
 }

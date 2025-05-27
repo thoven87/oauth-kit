@@ -18,7 +18,7 @@ import JWTKit
 import NIOFoundationCompat
 
 /// Provider for Google OAuth2/OpenID Connect authentication
-public struct GoogleOAuthProvider {
+public struct GoogleOAuthProvider: Sendable {
     /// Google's OAuth2/OIDC discovery URL
     public static let discoveryURL = "https://accounts.google.com/"
 

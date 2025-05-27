@@ -190,8 +190,8 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
     /// Redirect URI registered with Apple
     public var redirectURI: String?
 
-    /// Requested scopes (space-separated)
-    public var scope: String
+    /// Requested scopes
+    public var scopes: [String]
 
     /// Logger used for AppleOAuth2Client operations
     public var logger: Logging.Logger
@@ -232,7 +232,7 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         self.tokenEndpoint = AppleOAuthProvider.Endpoints.token
         self.authorizationEndpoint = AppleOAuthProvider.Endpoints.authorization
         self.redirectURI = redirectURI
-        self.scope = Self.scopesToString(scopes)
+        self.scopes = scopes
         self.logger = logger
 
         self.teamID = teamID

@@ -18,10 +18,10 @@ import NIOCore
 import NIOFoundationCompat
 
 /// Provider for KeyCloak OAuth authentication
-public struct KeyCloakOAuthProvider {
+public struct KeyCloakOAuthProvider: Sendable {
     /// KeyCloak's OAuth endpoints structure
     /// Note: KeyCloak is self-hosted, so the base URL will vary
-    public struct Endpoints {
+    public struct Endpoints: Sendable {
         /// The base URL of your KeyCloak instance
         let baseURL: String
 
@@ -93,13 +93,13 @@ public struct KeyCloakOAuthProvider {
     ///   - clientID: The client ID registered in KeyCloak
     ///   - clientSecret: The client secret from KeyCloak
     ///   - redirectURI: The redirect URI registered with KeyCloak
-    ///   - scope: The requested scopes (default: "openid profile email")
+    ///   - scopes: The requested scopes (default: "openid profile email")
     /// - Returns: An OpenID Connect client configured for KeyCloak
     public func createOpenIDConnectClient(
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "openid profile email"
+        scopes: [String] = ["openid", "profile", "email"]
     ) async throws -> OpenIDConnectClient {
 
         // Fetch OpenID configuration from KeyCloak discovery endpoint
@@ -111,7 +111,7 @@ public struct KeyCloakOAuthProvider {
             clientSecret: clientSecret,
             configuration: config,
             redirectURI: redirectURI,
-            scope: scope,
+            scopes: scopes,
             logger: oauthKit.logger
         )
     }

@@ -17,7 +17,7 @@ import Foundation
 import Logging
 
 /// Main entry point for OAuthKit functionality
-public struct OAuthKit {
+public struct OAuthKit: Sendable {
     /// The HTTP client used for making requests
     internal let httpClient: HTTPClient
 
@@ -40,7 +40,7 @@ public struct OAuthKit {
     ///   - tokenEndpoint: The token endpoint URL
     ///   - authorizationEndpoint: The authorization endpoint URL
     ///   - redirectURI: The redirect URI registered with the OAuth2 provider
-    ///   - scope: The requested scopes (space-separated)
+    ///   - scopes: The requested scopes (space-separated)
     /// - Returns: An OAuth2 client instance
     public func oauth2Client(
         clientID: String,
@@ -48,7 +48,7 @@ public struct OAuthKit {
         tokenEndpoint: String,
         authorizationEndpoint: String? = nil,
         redirectURI: String? = nil,
-        scope: String
+        scopes: [String]
     ) -> OAuth2Client {
         OAuth2Client(
             httpClient: httpClient,
@@ -57,7 +57,7 @@ public struct OAuthKit {
             tokenEndpoint: tokenEndpoint,
             authorizationEndpoint: authorizationEndpoint,
             redirectURI: redirectURI,
-            scope: scope,
+            scopes: scopes,
             logger: logger
         )
     }
@@ -75,7 +75,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String,
         redirectURI: String? = nil,
-        scope: String = "openid profile email offline_access"
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) async throws -> OpenIDConnectClient {
         // offline_access is also important as it will provide a refresh token
         let discovery = OpenIDDiscoveryService(httpClient: httpClient, logger: logger)
@@ -87,7 +87,7 @@ public struct OAuthKit {
             clientSecret: clientSecret,
             configuration: configuration,
             redirectURI: redirectURI,
-            scope: scope,
+            scopes: scopes,
             logger: self.logger
         )
     }
@@ -103,7 +103,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "openid email profile offline_access"
+        scopes: [String] = ["openid", "email", "profile", "offline_access"]
     ) async throws -> GoogleOAuthProvider {
         GoogleOAuthProvider(
             oauthKit: self,
@@ -112,7 +112,7 @@ public struct OAuthKit {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scope: scope
+                scopes: scopes
             )
         )
     }
@@ -123,13 +123,13 @@ public struct OAuthKit {
     ///   - clientID: The client/application ID from Azure portal
     ///   - clientSecret: The client secret from Azure portal
     ///   - redirectURI: The redirect URI registered with Azure
-    ///   - scope: The requested scopes (defaults to basic profile)
+    ///   - scopes: The requested scopes (defaults to basic profile)
     /// - Returns: A Microsoft OAuth provider
     public func microsoftMultiTenantProvider(
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "openid profile email offline_access User.Read"
+        scopes: [String] = ["openid", "profile", "email", "offline_access", "User.Read"]
     ) async throws -> MicrosoftOAuthProvider {
         MicrosoftOAuthProvider(
             oauthKit: self,
@@ -138,7 +138,7 @@ public struct OAuthKit {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scope: scope
+                scopes: scopes
             )
         )
     }
@@ -149,14 +149,14 @@ public struct OAuthKit {
     ///   - clientSecret: The client secret from Azure portal
     ///   - tenantID: The Azure AD tenant ID
     ///   - redirectURI: The redirect URI registered with Azure
-    ///   - scope: The requested scopes (defaults to basic profile)
+    ///   - scopes: The requested scopes (defaults to basic profile)
     /// - Returns: An OpenID Connect client configured for Microsoft
     public func microsoftProvider(
         clientID: String,
         clientSecret: String,
         tenantID: String,
         redirectURI: String,
-        scope: String = "openid profile email offline_access"
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) async throws -> MicrosoftOAuthProvider {
         MicrosoftOAuthProvider(
             oauthKit: self,
@@ -165,7 +165,7 @@ public struct OAuthKit {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scope: scope
+                scopes: scopes
             )
         )
     }
@@ -181,7 +181,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "read:user user:email"
+        scopes: [String] = ["read:user", "user:email"]
     ) -> GitHubOAuthProvider {
         GitHubOAuthProvider(
             oauthKit: self,
@@ -191,7 +191,7 @@ public struct OAuthKit {
                 tokenEndpoint: GitHubOAuthProvider.Endpoints.token,
                 authorizationEndpoint: GitHubOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
-                scope: scope
+                scopes: scopes
             )
         )
     }
@@ -271,8 +271,7 @@ public struct OAuthKit {
                 tokenEndpoint: FacebookOAuthProvider.Endpoints.token,
                 authorizationEndpoint: FacebookOAuthProvider.Endpoints.authorization,
                 redirectURI: redirectURI,
-                //  (comma or space-separated)
-                scope: scopes.joined(separator: " ")
+                scopes: scopes
             )
         )
     }
@@ -305,7 +304,7 @@ public struct OAuthKit {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scope: scopes.joined(separator: " ")
+                scopes: scopes
             )
         )
     }
@@ -317,7 +316,7 @@ public struct OAuthKit {
     ///   - clientID: The client ID from Cognito (App client ID)
     ///   - clientSecret: The client secret from Cognito (optional, as not all app clients have secrets)
     ///   - redirectURI: The redirect URI registered with Cognito
-    ///   - scope: The requested scopes (space-separated)
+    ///   - scopes: The requested scopes (space-separated)
     ///   - domain: Optional custom domain for your Cognito user pool (if you've set one up)
     /// - Returns: An AWS Cognito OAuth provider
     public func awsCognitoProvider(
@@ -326,7 +325,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String? = nil,
         redirectURI: String,
-        scope: String = "openid profile email",
+        scopes: [String] = ["openid", "profile", "email"],
         domain: String? = nil
     ) async throws -> AWSCognitoOAuthProvider {
 
@@ -340,7 +339,7 @@ public struct OAuthKit {
             clientID: clientID,
             clientSecret: effectiveSecret,
             redirectURI: redirectURI,
-            scope: scope
+            scopes: scopes
         )
 
         return AWSCognitoOAuthProvider(oauthKit: self, openIDConnectClient: client)
@@ -353,7 +352,7 @@ public struct OAuthKit {
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scope: String = "openid profile email offline_access"
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) -> KeyCloakOAuthProvider {
         KeyCloakOAuthProvider(
             oauthKit: self,
@@ -365,7 +364,7 @@ public struct OAuthKit {
                 tokenEndpoint: endpoints.token,
                 authorizationEndpoint: endpoints.authorization,
                 redirectURI: redirectURI,
-                scope: scope
+                scopes: scopes
             )
         )
     }

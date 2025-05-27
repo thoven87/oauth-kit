@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 /// OpenID Connect provider configuration
-public struct OpenIDConfiguration: Codable {
+public struct OpenIDConfiguration: Codable, Sendable {
     /// Authorization endpoint URL
     public let authorizationEndpoint: String
 

@@ -19,7 +19,7 @@ import NIOFoundationCompat
 import NIOHTTP1
 
 /// Provider for Facebook OAuth authentication
-public struct FacebookOAuthProvider {
+public struct FacebookOAuthProvider: Sendable {
     /// Facebook's OAuth2 endpoints
     public struct Endpoints {
         /// The authorization endpoint URL

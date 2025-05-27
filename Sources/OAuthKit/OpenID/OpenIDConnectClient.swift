@@ -19,7 +19,7 @@ import Logging
 import NIOFoundationCompat
 
 /// Client for interacting with OpenID Connect providers
-public struct OpenIDConnectClient {
+public struct OpenIDConnectClient: Sendable {
     /// The underlying OAuth2 client
     private let oauth2Client: OAuth2Client
 
@@ -45,7 +45,7 @@ public struct OpenIDConnectClient {
     internal let redirectURI: String?
 
     /// The requested scopes (space-separated)
-    internal let scope: String
+    internal let scopes: [String]
 
     /// Initialize a new OpenID Connect client
     /// - Parameters:
@@ -62,7 +62,7 @@ public struct OpenIDConnectClient {
         clientSecret: String,
         configuration: OpenIDConfiguration,
         redirectURI: String? = nil,
-        scope: String = "openid profile email offline_access",
+        scopes: [String] = ["openid", "profile", "email", "offline_access"],
         logger: Logger = Logger(label: "com.oauthkit.OpenIDConnectClient")
     ) async throws {
         self.httpClient = httpClient
@@ -71,7 +71,7 @@ public struct OpenIDConnectClient {
         self.logger = logger
         self.clientSecret = clientSecret
         self.redirectURI = redirectURI
-        self.scope = scope
+        self.scopes = scopes
         self.oauth2Client = OAuth2Client(
             httpClient: httpClient,
             clientID: clientID,
@@ -79,10 +79,10 @@ public struct OpenIDConnectClient {
             tokenEndpoint: configuration.tokenEndpoint,
             authorizationEndpoint: configuration.authorizationEndpoint,
             redirectURI: redirectURI,
-            scope: scope,
+            scopes: scopes,
             logger: logger
         )
-        let jwks = try await Self.loadJWKS(jwksURI: configuration.jwksUri)
+        let jwks = try await Self.loadJWKS(httpClient: httpClient, jwksURI: configuration.jwksUri)
         self.jwtSigners = try await JWTKeyCollection().add(jwks: jwks)
     }
 
@@ -238,7 +238,7 @@ public struct OpenIDConnectClient {
     /// - Returns: The validated ID token claims
     /// - Throws: OAuth2Error if validation fails
     public func validateIDToken(_ idToken: String) async throws -> IDTokenClaims {
-
+        logger.info("ID token validation started \(idToken)")
         guard let signers = jwtSigners else {
             throw OAuth2Error.jwksError("Failed to load JWT signers")
         }
@@ -280,31 +280,78 @@ public struct OpenIDConnectClient {
         }
     }
 
-    /// Load JSON Web Key Set from the provider
-    /// - Throws: OAuth2Error if the JWKS can't be loaded
-    private static func loadJWKS(httpClient: HTTPClient = .shared, jwksURI: String) async throws -> JWKS {
+    /// Load JSON Web Key Set from the provider with retry mechanism
+    /// - Parameters:
+    ///   - httpClient: The HTTP client to use for requests
+    ///   - jwksURI: The JWKS endpoint URI
+    ///   - maxRetries: Maximum number of retry attempts (default: 5)
+    ///   - retryDelay: Base delay between retries in nanoseconds (default: 1 second)
+    /// - Throws: OAuth2Error if the JWKS can't be loaded after all retries
+    private static func loadJWKS(
+        httpClient: HTTPClient = .shared,
+        jwksURI: String,
+        maxRetries: Int = 5,
+        retryDelay: UInt64 = 1_000_000_000
+    ) async throws -> JWKS {
         let logger = Logger(label: "com.oauthkit.OpenIDConnectClient")
 
-        var request = HTTPClientRequest(url: jwksURI)
-        request.method = .GET
-        request.headers.add(name: "Accept", value: "application/json")
-        request.headers.add(name: "User-Agent", value: USER_AGENT)
+        var lastError: Error?
 
-        do {
-            let response = try await httpClient.execute(request, timeout: .seconds(60))
+        for attempt in 1...(maxRetries + 1) {
+            do {
+                var request = HTTPClientRequest(url: jwksURI)
+                request.method = .GET
+                request.headers.add(name: "Accept", value: "application/json")
+                request.headers.add(name: "User-Agent", value: USER_AGENT)
 
-            guard response.status == .ok else {
-                logger.error("JWKS request failed with status: \(response.status)")
-                throw OAuth2Error.jwksError("JWKS request failed with status: \(response.status)")
+                let response = try await httpClient.execute(request, timeout: .seconds(60))
+
+                guard response.status == .ok else {
+                    let statusError = OAuth2Error.jwksError("JWKS request failed with status: \(response.status)")
+                    if attempt <= maxRetries {
+                        logger.warning("JWKS request attempt \(attempt)/\(maxRetries) failed with status: \(response.status), retrying...")
+                        lastError = statusError
+                        try await Task.sleep(nanoseconds: retryDelay * UInt64(attempt))
+                        continue
+                    } else {
+                        logger.error("JWKS request failed with status: \(response.status) after \(maxRetries) attempts")
+                        throw statusError
+                    }
+                }
+
+                let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
+                return try JSONDecoder().decode(JWKS.self, from: jwks)
+            } catch let error as OAuth2Error {
+                if attempt <= maxRetries {
+                    logger.warning("JWKS request attempt \(attempt)/\(maxRetries) failed with OAuth2Error: \(error), retrying...")
+                    lastError = error
+                    try await Task.sleep(nanoseconds: retryDelay * UInt64(attempt))
+                    continue
+                } else {
+                    throw error
+                }
+            } catch {
+                if attempt <= maxRetries {
+                    logger.warning("JWKS request attempt \(attempt)/\(maxRetries) failed with error: \(error), retrying...")
+                    lastError = error
+                    try await Task.sleep(nanoseconds: retryDelay * UInt64(attempt))
+                    continue
+                } else {
+                    logger.error("JWKS request failed with error: \(error) after \(maxRetries) attempts")
+                    throw OAuth2Error.jwksError("JWKS request failed: \(error)")
+                }
             }
+        }
 
-            let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
-            return try JSONDecoder().decode(JWKS.self, from: jwks)
-        } catch let error as OAuth2Error {
-            throw error
-        } catch {
-            logger.error("JWKS request failed with error: \(error)")
-            throw OAuth2Error.jwksError("JWKS request failed: \(error)")
+        // This should never be reached due to the logic above, but Swift requires it
+        if let lastError = lastError {
+            if let oauth2Error = lastError as? OAuth2Error {
+                throw oauth2Error
+            } else {
+                throw OAuth2Error.jwksError("JWKS request failed after all retry attempts: \(lastError)")
+            }
+        } else {
+            throw OAuth2Error.jwksError("JWKS request failed after all retry attempts")
         }
     }
 }

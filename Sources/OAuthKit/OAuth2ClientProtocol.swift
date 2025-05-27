@@ -39,8 +39,8 @@ public protocol OAuth2ClientProtocol: Sendable {
     /// Redirect URI registered with the OAuth2 provider
     var redirectURI: String? { get set }
 
-    /// Requested scopes (space-separated)
-    var scope: String { get set }
+    /// Requested scopes
+    var scopes: [String] { get set }
 
     /// Logger used for OAuth operations
     var logger: Logger { get set }
@@ -52,7 +52,7 @@ public protocol OAuth2ClientProtocol: Sendable {
         tokenEndpoint: String,
         authorizationEndpoint: String?,
         redirectURI: String?,
-        scope: String,
+        scopes: [String],
         logger: Logger
     )
 }
@@ -67,7 +67,7 @@ extension OAuth2ClientProtocol {
     ///   - tokenEndpoint: The OAuth2 token endpoint
     ///   - authorizationEndpoint:The OAuth2 authorization endpoint
     ///   - redirectURI: The redirect URI registered with the OAuth2 provider
-    ///   - scope: The requested scopes (space-separated)
+    ///   - scopes: The requested scopes
     ///   - logger: Logger used for OAuth2Client operations
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
@@ -76,7 +76,7 @@ extension OAuth2ClientProtocol {
         tokenEndpoint: String,
         authorizationEndpoint: String? = nil,
         redirectURI: String? = nil,
-        scope: String = "",
+        scopes: [String] = [],
         logger: Logger = Logger(label: "com.oauthkit.OAuth2Client")
     ) {
         self.init(
@@ -86,7 +86,7 @@ extension OAuth2ClientProtocol {
             tokenEndpoint: tokenEndpoint,
             authorizationEndpoint: authorizationEndpoint,
             redirectURI: redirectURI,
-            scope: scope,
+            scopes: scopes,
             logger: logger
         )
     }
@@ -123,8 +123,8 @@ extension OAuth2ClientProtocol {
             URLQueryItem(name: "response_type", value: "code"),
         ]
 
-        if !scope.isEmpty {
-            queryItems.append(URLQueryItem(name: "scope", value: scope))
+        if !scopes.isEmpty {
+            queryItems.append(URLQueryItem(name: "scope", value: scopesToString(scopes)))
         }
 
         if let state = state {
@@ -204,8 +204,8 @@ extension OAuth2ClientProtocol {
             "client_secret": clientSecret,
         ]
 
-        if !scope.isEmpty {
-            parameters["scope"] = scope
+        if !scopes.isEmpty {
+            parameters["scope"] = scopesToString(scopes)
         }
 
         // Add any additional parameters
@@ -326,15 +326,58 @@ extension OAuth2ClientProtocol {
     }
 
     internal static func getJWKS(httpClient: HTTPClient, jwksURL: String) async throws -> JWKS {
-        var request = HTTPClientRequest(url: jwksURL)
-        request.headers.add(name: "User-Agent", value: USER_AGENT)
-        let response = try await httpClient.execute(request, timeout: .seconds(60))
-        let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
-        return try JSONDecoder().decode(JWKS.self, from: jwks)
+        let maxRetries = 5
+        let baseDelay: UInt64 = 1_000_000_000  // 1 second in nanoseconds
+        var lastError: Error?
+
+        for attempt in 1...maxRetries {
+            do {
+                var request = HTTPClientRequest(url: jwksURL)
+                request.headers.add(name: "User-Agent", value: USER_AGENT)
+
+                let response = try await httpClient.execute(request, timeout: .seconds(60))
+
+                guard response.status == .ok else {
+                    let statusError = OAuth2Error.jwksError("JWKS request failed with status: \(response.status)")
+                    if attempt == maxRetries {
+                        throw statusError
+                    }
+                    lastError = statusError
+                    try await Task.sleep(nanoseconds: baseDelay * UInt64(attempt))
+                    continue
+                }
+
+                let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
+                return try JSONDecoder().decode(JWKS.self, from: jwks)
+            } catch let error as OAuth2Error {
+                if attempt == maxRetries {
+                    throw error
+                }
+                lastError = error
+                try await Task.sleep(nanoseconds: baseDelay * UInt64(attempt))
+            } catch {
+                if attempt == maxRetries {
+                    throw OAuth2Error.jwksError("JWKS request failed: \(error)")
+                }
+                lastError = error
+                try await Task.sleep(nanoseconds: baseDelay * UInt64(attempt))
+            }
+        }
+
+        // This should never be reached
+        if let lastError = lastError {
+            if let oauth2Error = lastError as? OAuth2Error {
+                throw oauth2Error
+            } else {
+                throw OAuth2Error.jwksError("JWKS request failed after all retry attempts: \(lastError)")
+            }
+        } else {
+            throw OAuth2Error.jwksError("JWKS request failed after all retry attempts")
+        }
     }
 
-    internal static func scopesToString(_ scopes: [String]) -> String {
-        scopes.joined(separator: ",")
+    internal func scopesToString(_ scopes: [String]) -> String {
+        scopes.joined(separator: " ")
     }
 }
 
