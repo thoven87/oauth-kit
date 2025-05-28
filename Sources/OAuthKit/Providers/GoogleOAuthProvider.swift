@@ -52,6 +52,8 @@ public struct GoogleOAuthProvider: Sendable {
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
     ///   - accessType: offline | online refresh acess token
     ///   - includeGrantedScopes: Request incremental authorization
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
+    ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthURL(
         state: String? = nil,
@@ -60,9 +62,10 @@ public struct GoogleOAuthProvider: Sendable {
         usePKCE: Bool = true,
         accessType: TokenAccessType = .offline,
         includeGrantedScopes: Bool = true,
+        additionalParameters: [String: String] = [:],
         scopes: [String]
     ) throws -> (url: URL, codeVerifier: String?) {
-        var additionalParams: [String: String] = [:]
+        var additionalParams = additionalParameters
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
 
@@ -86,9 +89,11 @@ public struct GoogleOAuthProvider: Sendable {
         additionalParams["access_type"] = accessType.rawValue
         additionalParams["include_granted_scopes"] = String(includeGrantedScopes)
 
-        // Generate nonce for improved security
-        let nonce = UUID().uuidString
-        additionalParams["nonce"] = nonce
+        if additionalParameters["nonce"] == nil {
+            // Generate nonce for improved security
+            let nonce = UUID().uuidString
+            additionalParams["nonce"] = nonce
+        }
 
         let url = try client.generateAuthorizationURL(
             state: state,

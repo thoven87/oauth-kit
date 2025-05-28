@@ -57,20 +57,20 @@ public struct AWSCognitoOAuthProvider {
     /// Generate an authorization URL for AWS Cognito sign-in
     /// - Parameters:
     ///   - state: An opaque value to maintain state between the request and callback
-    ///   - nonce: A random value for additional security
     ///   - identityProvider: The name of an identity provider configured in your user pool to bypass the Cognito UI
     ///   - idpIdentifier: The identity provider identifier (alternative to identityProvider)
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
     ///   - cognitoDomain: Custom or default domain for login UI (required when using hosted UI)
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
     ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
         state: String? = nil,
-        nonce: String? = nil,
         identityProvider: String? = nil,
         idpIdentifier: String? = nil,
         usePKCE: Bool = true,
         cognitoDomain: String? = nil,
+        additionalParameters: [String: String] = [:],
         scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) throws -> (url: URL, codeVerifier: String?) {
 
@@ -85,10 +85,10 @@ public struct AWSCognitoOAuthProvider {
         }
 
         // Prepare additional parameters for AWS Cognito
-        var additionalParams: [String: String] = [:]
+        var additionalParams = additionalParameters
 
-        if let nonce = nonce {
-            additionalParams["nonce"] = nonce
+        if additionalParams["nonce"] == nil {
+            additionalParams["nonce"] = UUID().uuidString
         }
 
         // Identity Provider selection - used to bypass the Cognito UI
