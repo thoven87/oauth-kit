@@ -97,7 +97,7 @@ public struct OpenIDConnectClient: Sendable {
     public func authorizationURL(
         state: String? = nil,
         codeChallenge: String? = nil,
-        codeChallengeMethod: String? = nil,
+        codeChallengeMethod: OAuthCodeChallengeMethod? = nil,
         additionalParameters: [String: String] = [:]
     ) throws -> URL {
         try oauth2Client.authorizationURL(
@@ -370,6 +370,9 @@ public struct IDTokenClaims: JWTPayload, Equatable {
     /// Expiration time
     public let exp: ExpirationClaim?
 
+    /// External user id
+    public let userId: String?
+
     /// Time at which the JWT was issued
     public let iat: IssuedAtClaim?
 
@@ -437,6 +440,7 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         case phoneNumberVerified = "phone_number_verified"
         case address
         case updatedAt = "updated_at"
+        case userId = "user_id"
     }
 
     public init(from decoder: Decoder) throws {
@@ -481,6 +485,7 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         phoneNumberVerified = try container.decodeIfPresent(Bool.self, forKey: .phoneNumberVerified)
         address = try container.decodeIfPresent(AddressClaim.self, forKey: .address)
         updatedAt = try container.decodeIfPresent(TimeInterval.self, forKey: .updatedAt)
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
 
         // Capture additional claims
         let customContainer = try decoder.container(keyedBy: DynamicCodingKeys.self)
@@ -532,6 +537,7 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         try container.encodeIfPresent(phoneNumberVerified, forKey: .phoneNumberVerified)
         try container.encodeIfPresent(address, forKey: .address)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(userId, forKey: .userId)
 
         // Encode additional claims
         //        if let additionalClaims = additionalClaims {

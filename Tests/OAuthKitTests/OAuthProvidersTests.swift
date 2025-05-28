@@ -34,7 +34,7 @@ struct OAuthProvidersTests {
             clientSecret: "",
             redirectURI: redirectURI
         )
-        let lp = try googleProvider.signInURL()
+        let lp = try googleProvider.generateAuthURL()
         #expect(lp.codeVerifier != nil)
         #expect(lp.url.absoluteString.contains("code_challenge"))
     }
@@ -148,7 +148,7 @@ struct OAuthProvidersTests {
             redirectURI: redirectURI
         )
 
-        let (url, codeVerifier) = try googleProvider.signInURL(
+        let (url, codeVerifier) = try googleProvider.generateAuthURL(
             state: "test-state",
             prompt: .selectAccount
         )
