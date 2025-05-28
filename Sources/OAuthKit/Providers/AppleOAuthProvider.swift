@@ -44,6 +44,24 @@ public struct AppleOAuthProvider {
     /// An OAuth2 client configured for Apple
     private var client: AppleOAuth2Client
 
+    /// The type of response mode expected.
+    /// Valid values are query, fragment, and form_post.
+    /// If you requested any scopes, the value must be form_post.
+    public enum ResponseMode: String {
+        case form = "form_post"
+        case fragment
+        case query
+    }
+
+    /// The type of response requested. Valid values are code and id_token.
+    /// You can request only code, or both code and id_token.
+    /// Requesting only id_token is unsupported.
+    /// When requesting id_token, response_mode must be either fragment or form_post.
+    public enum ResponseType: String {
+        case code
+        case idToken = "id_token"
+    }
+
     /// Initialize a new Apple OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter client: An OAuth2 client configured for Apple
@@ -62,11 +80,13 @@ public struct AppleOAuthProvider {
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
     ///   - additionalParameters: Additional parameters to include in the authorization URL
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func getAuthorizationURL(
         state: String? = nil,
         usePKCE: Bool = true,
+        responseMode: ResponseMode = .query,
+        responseType: [ResponseType] = [.code],
         additionalParameters: [String: String] = [:],
-        scopes: [String] = []
+        scopes: [String] = ["name", "email"]
     ) throws -> (url: URL, codeVerifier: String?) {
 
         var codeVerifier: String? = nil
@@ -82,7 +102,11 @@ public struct AppleOAuthProvider {
         var params = additionalParameters
 
         // Add Apple-specific parameters
-        params["response_mode"] = "form_post"
+        params["response_mode"] = responseMode.rawValue
+
+        params["response_type"] = responseType.map {
+            $0.rawValue
+        }.joined(separator: " ")
 
         let url = try client.generateAuthorizationURL(
             state: state,
@@ -120,56 +144,54 @@ public struct AppleOAuthProvider {
     ///   - idToken: The ID token from the token response
     ///   - nonce: The nonce used during authorization, if any
     /// - Returns: The decoded Apple identity claims
-    //    public func validateIdentityToken(
-    //        idToken: String,
-    //        nonce: String? = nil
-    //    ) async throws -> AppleIdentityClaims {
-    //        // Create a JWTSigners instance
-    //        let signers = JWTKeyCollection()
-    //
-    //        // Fetch Apple's JWKS and configure the signers
-    //        //try await fetchAndConfigureAppleJWKS(signers: signers)
-    //
-    //        // Verify and decode the token
-    //        let claims = try await signers.verify(idToken, as: AppleIdentityClaims.self)
-    //
-    //        // Validate the issuer
-    //        guard claims.iss == "https://appleid.apple.com" else {
-    //            throw OAuth2Error.tokenValidationError("Invalid issuer: \(claims.iss ?? "nil")")
-    //        }
-    //
-    //        // If a nonce was provided, validate it
-    //        if let nonce = nonce, claims.nonce != nonce {
-    //            throw OAuth2Error.tokenValidationError("Nonce mismatch")
-    //        }
-    //
-    //        return claims
-    //    }
+    public func validateIdentityToken(
+        idToken: String,
+        nonce: String? = nil
+    ) async throws -> AppleIdentityClaims {
+
+        // Verify and decode the token
+        let claims = try await client.jwtKeys.verify(
+            idToken,
+            as: AppleIdentityClaims.self
+        )
+
+        // Validate the issuer
+        guard claims.iss == "https://appleid.apple.com" else {
+            throw OAuth2Error.tokenValidationError("Invalid issuer: \(claims.iss)")
+        }
+
+        // If a nonce was provided, validate it
+        if let nonce = nonce, claims.nonce != nonce {
+            throw OAuth2Error.tokenValidationError("Nonce mismatch")
+        }
+
+        return claims
+    }
 
     /// Create a user profile from Apple's identity token and user info
     /// - Parameters:
     ///   - identityClaims: The validated identity claims from Apple's ID token
     ///   - userInfo: Additional user info from Apple's authorization response (optional)
     /// - Returns: An Apple user profile
-    //    public func getUserProfile(
-    //        identityClaims: AppleIdentityClaims,
-    //        userInfo: AppleUserInfo? = nil
-    //    ) -> AppleUserProfile {
-    //        return AppleUserProfile(
-    //            id: identityClaims.sub ?? "",
-    //            email: identityClaims.email,
-    //            emailVerified: identityClaims.emailVerified,
-    //            isPrivateEmail: identityClaims.isPrivateEmail,
-    //            firstName: userInfo?.name?.firstName,
-    //            lastName: userInfo?.name?.lastName,
-    //            fullName: {
-    //                if let firstName = userInfo?.name?.firstName, let lastName = userInfo?.name?.lastName {
-    //                    return "\(firstName) \(lastName)".trimmingCharacters(in: .whitespacesAndNewlines)
-    //                }
-    //                return nil
-    //            }()
-    //        )
-    //    }
+    public func getUserProfile(
+        identityClaims: AppleIdentityClaims,
+        userInfo: AppleUserInfo? = nil
+    ) -> AppleUserProfile {
+        AppleUserProfile(
+            id: identityClaims.sub.value,
+            email: identityClaims.email,
+            emailVerified: identityClaims.emailVerified,
+            isPrivateEmail: identityClaims.isPrivateEmail,
+            firstName: userInfo?.name?.firstName,
+            lastName: userInfo?.name?.lastName,
+            fullName: {
+                if let firstName = userInfo?.name?.firstName, let lastName = userInfo?.name?.lastName {
+                    return "\(firstName) \(lastName)".trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                return nil
+            }()
+        )
+    }
 }
 
 /// Apple-specific OAuth2 client that generates a JWT client secret automatically
