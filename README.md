@@ -62,16 +62,16 @@ let oauth2Client = oauthKit.oauth2Client(
     tokenEndpoint: "https://auth.example.com/oauth2/token",
     authorizationEndpoint: "https://auth.example.com/oauth2/authorize",
     redirectURI: "https://your-app.example.com/callback",
-    scope: "profile email offline_access"
 )
 
 // Generate a PKCE code challenge and verifier
 let (codeVerifier, codeChallenge) = OAuth2Client.generatePKCE()
 
 // Generate an authorization URL for the user to visit
-let authURL = try oauth2Client.authorizationURL(
+let authURL = try oauth2Client.generateAuthorizationURL(
     state: "random-state-value",
-    codeChallenge: codeChallenge
+    codeChallenge: codeChallenge,
+    scopes: ["profile", "email", "offline_access"]
 )
 
 print("Visit this URL to authorize: \(authURL)")
@@ -102,10 +102,11 @@ let googleProvider = try await oauthKit.googleProvider(
 )
 
 // Generate a Google Sign-In URL with recommended parameters
-let (googleAuthURL, googleCodeVerifier) = try googleProvider.signInURL(
+let (googleAuthURL, googleCodeVerifier) = try googleProvider.generateAuthorizationURL(
     state: UUID().uuidString,
     prompt: .selectAccount, // Force account selection screen
-    loginHint: "user@example.com" // Optional: pre-fill email
+    loginHint: "user@example.com" // Optional: pre-fill email,
+    scopes: ["profile", "email", "offline_access"]
 )
 
 print("Google Sign-In URL: \(googleAuthURL)")
@@ -138,7 +139,6 @@ let microsoftProvider = oauthKit.microsoftMultiTenantProvider(
     clientID: "your-azure-client-id",  // From Azure portal
     clientSecret: "your-azure-client-secret", // From Azure portal
     redirectURI: "https://your-app.example.com/ms-callback", // Must match Azure portal
-    scope: "openid profile email User.Read" // Include Graph API permissions as needed
 )
 
 // Alternatively, for single-tenant (organization-specific) applications:
@@ -153,10 +153,11 @@ let microsoftProvider = try await microsoftProvider.microsoftProvider(
 */
 
 // Generate a Microsoft Sign-In URL with recommended parameters
-let (msAuthURL, msCodeVerifier) = try microsoftProvider.signInURL(
+let (msAuthURL, msCodeVerifier) = try microsoftProvider.generateAuthorizationURL(
     state: UUID().uuidString,
     prompt: .selectAccount, // Force account selection
-    domainHint: .organizations // Hint for work/school accounts, use .consumers for personal accounts
+    domainHint: .organizations, // Hint for work/school accounts, use .consumers for personal accounts
+    scopes: ["openid", "profile", "email", "User.Read"] // Include Graph API permissions as needed
 )
 
 print("Microsoft Sign-In URL: \(msAuthURL)")
@@ -199,7 +200,6 @@ let oidcClient = try await oauthKit.openIDConnectClient(
     clientID: "your-google-client-id",
     clientSecret: "your-google-client-secret",
     redirectURI: "https://your-app.example.com/callback",
-    scope: "openid profile email"
 )
 
 // Generate a PKCE code challenge and verifier
@@ -207,10 +207,11 @@ let (codeVerifier, codeChallenge) = OAuth2Client.generatePKCE()
 
 // Generate an authorization URL with a nonce for OIDC
 let nonce = UUID().uuidString
-let authURL = try oidcClient.authorizationURL(
+let authURL = try oidcClient.generateAuthorizationURL(
     state: "random-state-value",
     codeChallenge: codeChallenge,
-    additionalParameters: ["nonce": nonce]
+    additionalParameters: ["nonce": nonce],
+    scopes: ["openid", "profile", email"]
 )
 
 print("Visit this URL to authorize: \(authURL)")
@@ -242,7 +243,6 @@ let oauth2Client = oauthKit.oauth2Client(
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
     tokenEndpoint: "https://auth.example.com/oauth2/token",
-    scope: "api:read api:write"
 )
 
 // Request a token using client credentials
