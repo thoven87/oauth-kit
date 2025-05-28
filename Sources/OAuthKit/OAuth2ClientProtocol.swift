@@ -102,7 +102,7 @@ extension OAuth2ClientProtocol {
     public func authorizationURL(
         state: String? = nil,
         codeChallenge: String? = nil,
-        codeChallengeMethod: String? = nil,
+        codeChallengeMethod: OAuthCodeChallengeMethod? = .s256,
         additionalParameters: [String: String] = [:]
     ) throws -> URL {
         guard let authorizationEndpoint = authorizationEndpoint else {
@@ -135,9 +135,9 @@ extension OAuth2ClientProtocol {
             queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
 
             if let codeChallengeMethod = codeChallengeMethod {
-                queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
+                queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod.rawValue))
             } else {
-                queryItems.append(URLQueryItem(name: "code_challenge_method", value: "S256"))
+                queryItems.append(URLQueryItem(name: "code_challenge_method", value: OAuthCodeChallengeMethod.s256.rawValue))
             }
         }
 

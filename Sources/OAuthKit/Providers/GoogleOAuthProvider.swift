@@ -28,6 +28,11 @@ public struct GoogleOAuthProvider: Sendable {
     /// The OpenID Connect client configured for Google
     private let client: OpenIDConnectClient
 
+    public enum TokenAccessType: String {
+        case offline
+        case online
+    }
+
     /// Initialize a new Google OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter openIDConnectClient: An OpenID Connect client configured for Google
@@ -45,12 +50,16 @@ public struct GoogleOAuthProvider: Sendable {
     ///   - prompt: Controls the Google Sign-In prompt behavior
     ///   - loginHint: Email address or sub identifier to pre-fill the authentication screen
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - accessType: offline | online refresh acess token
+    ///   - includeGrantedScopes: Request incremental authorization
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthURL(
         state: String? = nil,
         prompt: GooglePrompt? = nil,
         loginHint: String? = nil,
-        usePKCE: Bool = true
+        usePKCE: Bool = true,
+        accessType: TokenAccessType = .offline,
+        includeGrantedScopes: Bool = true
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
         var codeVerifier: String? = nil
@@ -73,8 +82,8 @@ public struct GoogleOAuthProvider: Sendable {
         }
 
         // Google recommends adding these parameters
-        additionalParams["access_type"] = "offline"  // Request refresh token
-        additionalParams["include_granted_scopes"] = "true"  // Request incremental authorization
+        additionalParams["access_type"] = accessType.rawValue
+        additionalParams["include_granted_scopes"] = String(includeGrantedScopes)
 
         // Generate nonce for improved security
         let nonce = UUID().uuidString
@@ -87,6 +96,38 @@ public struct GoogleOAuthProvider: Sendable {
         )
 
         return (url, codeVerifier)
+    }
+
+    /// Retrieves an access token using a refresh token
+    /// - Parameters:
+    ///  - refreshToken: a valid refresh token
+    ///  - additionalParameters: additional parameters
+    public func refreshAccessToken(
+        refreshToken: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims?) {
+        try await client.refreshToken(
+            refreshToken,
+            additionalParameters: additionalParameters
+        )
+    }
+
+    /// End the user's session (logout)
+    /// - Parameters:
+    ///   - idToken: The ID token from the authentication session
+    ///   - postLogoutRedirectURI: Optional URI to redirect to after logout
+    ///   - state: Optional state parameter for the logout request
+    /// - Returns: The end session (logout) URL
+    public func revokeToken(
+        idToken: String,
+        postLogoutRedirectURI: String?,
+        state: String?
+    ) throws -> URL {
+        try client.endSessionURL(
+            idToken: idToken,
+            postLogoutRedirectURI: postLogoutRedirectURI,
+            state: state
+        )
     }
 
     /// Exchange an authorization code for tokens with Google
