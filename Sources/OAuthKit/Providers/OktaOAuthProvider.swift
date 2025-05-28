@@ -54,7 +54,6 @@ public struct OktaOAuthProvider: Sendable {
     /// Generate an authorization URL for Okta sign-in
     /// - Parameters:
     ///   - state: An opaque value to maintain state between the request and callback
-    ///   - nonce: A random value for additional security
     ///   - prompt: Controls the Okta sign-in prompt behavior
     ///   - idpID: The identity provider ID to bypass the Okta sign-in page and go directly to the specified IdP
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
@@ -62,10 +61,10 @@ public struct OktaOAuthProvider: Sendable {
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
         state: String? = nil,
-        nonce: String? = nil,
         prompt: OktaPrompt? = nil,
         idpID: String? = nil,
         usePKCE: Bool = true,
+        additionalParameters: [String: String] = [:],
         scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) async throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
@@ -79,11 +78,7 @@ public struct OktaOAuthProvider: Sendable {
         }
 
         // Prepare additional parameters for Okta
-        var additionalParams: [String: String] = [:]
-
-        if let nonce = nonce {
-            additionalParams["nonce"] = nonce
-        }
+        var additionalParams = additionalParameters
 
         if let prompt = prompt {
             additionalParams["prompt"] = prompt.rawValue

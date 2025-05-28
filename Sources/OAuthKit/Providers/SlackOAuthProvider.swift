@@ -52,12 +52,14 @@ public struct SlackOAuthProvider {
     ///   - state: An opaque value to maintain state between the request and callback
     ///   - usePKCE: Whether to use PKCE (supported by Slack)
     ///   - userScope: Additional user scopes for Slack user tokens
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
         state: String? = nil,
         usePKCE: Bool = true,
         scopes: [String] = [],
-        userScope: [String]? = nil
+        userScope: [String]? = nil,
+        additionalParameters: [String: String] = [:]
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -70,7 +72,7 @@ public struct SlackOAuthProvider {
         }
 
         // Prepare additional parameters for Slack
-        var additionalParams: [String: String] = [:]
+        var additionalParams = additionalParameters
 
         // Add user_scope if provided (for Slack user tokens)
         if let userScope = userScope, !userScope.isEmpty {

@@ -72,6 +72,14 @@ public struct KeyCloakOAuthProvider: Sendable {
 
     /// An OAuth2 client configured for KeyCloak
     private let client: OAuth2Client
+    
+    public enum Prompt: String {
+        case consent
+        case create
+        case login
+        case none
+        case select = "select_account"
+    }
 
     /// Initialize a new KeyCloak OAuth provider
     /// - Parameters:
@@ -127,7 +135,8 @@ public struct KeyCloakOAuthProvider: Sendable {
         usePKCE: Bool = true,
         loginHint: String? = nil,
         locale: String? = nil,
-        prompt: String? = nil,
+        prompt: Prompt? = nil,
+        additionalParameters: [String: String] = [:],
         scopes: [String] = ["openid", "profile", "email"]
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
@@ -141,7 +150,7 @@ public struct KeyCloakOAuthProvider: Sendable {
         }
 
         if let prompt = prompt {
-            additionalParams["prompt"] = prompt
+            additionalParams["prompt"] = prompt.rawValue
         }
 
         // Generate PKCE if enabled

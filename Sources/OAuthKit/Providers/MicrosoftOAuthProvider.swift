@@ -50,6 +50,7 @@ public struct MicrosoftOAuthProvider: Sendable {
     ///   - loginHint: Email address to pre-fill the authentication screen
     ///   - domainHint: Hint about the domain/tenant the user should use to sign in
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
     ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
@@ -58,9 +59,10 @@ public struct MicrosoftOAuthProvider: Sendable {
         loginHint: String? = nil,
         domainHint: MicrosoftDomainHint? = nil,
         usePKCE: Bool = true,
+        additionalParameters: [String: String] = [:],
         scopes: [String] = ["openid", "profile", "email", "offline_access", "User.Read"]
     ) throws -> (url: URL, codeVerifier: String?) {
-        var additionalParams: [String: String] = [:]
+        var additionalParams = additionalParameters
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
 
@@ -87,9 +89,11 @@ public struct MicrosoftOAuthProvider: Sendable {
         // Microsoft recommends adding response_mode for security
         additionalParams["response_mode"] = "query"
 
-        // Generate nonce for improved security
-        let nonce = UUID().uuidString
-        additionalParams["nonce"] = nonce
+        if additionalParams["nonce"] == nil {
+            // Generate nonce for improved security
+            let nonce = UUID().uuidString
+            additionalParams["nonce"] = nonce
+        }
 
         let url = try client.generateAuthorizationURL(
             state: state,
