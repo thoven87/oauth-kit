@@ -53,9 +53,10 @@ public struct SlackOAuthProvider {
     ///   - usePKCE: Whether to use PKCE (supported by Slack)
     ///   - userScope: Additional user scopes for Slack user tokens
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         usePKCE: Bool = true,
+        scopes: [String] = [],
         userScope: [String]? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
@@ -76,10 +77,11 @@ public struct SlackOAuthProvider {
             additionalParams["user_scope"] = userScope.joined(separator: ",")
         }
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParams
+            additionalParameters: additionalParams,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
@@ -206,9 +208,6 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     /// Redirect URI registered with Slack
     public var redirectURI: String?
 
-    /// Requested scopes
-    public var scopes: [String]
-
     /// Logger used for SlackOAuth2Client operations
     public var logger: Logging.Logger
 
@@ -218,14 +217,12 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     ///   - clientID: The Slack  client ID
     ///   - clientSecret: The  Slack client secret
     ///   - redirectURI: The redirect URI registered with Slack
-    ///   - scopes: The requested scopes
     ///   - logger: Logger used for SlackOAuth2Client operations
     public init(
         httpClient: HTTPClient = .shared,
         clientID: String,
         clientSecret: String,
         redirectURI: String? = nil,
-        scopes: [String] = [],
         logger: Logger = Logger(label: "com.oauthkit.SlackOAuth2Client")
     ) {
 
@@ -236,7 +233,6 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
         self.authorizationEndpoint = SlackOAuthProvider.Endpoints.authorization
         self.redirectURI = redirectURI
         self.logger = logger
-        self.scopes = scopes
     }
 
     /// Exchange an authorization code for tokens with GitHub
@@ -246,13 +242,15 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        additionalParameters: [String: String] = [:]
     ) async throws -> TokenResponse {
         // TODO: make getToken return a generic type
         // So that a SlackTokenResponse is returned here instead
         try await getToken(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            additionalParameters: additionalParameters
         )
     }
 

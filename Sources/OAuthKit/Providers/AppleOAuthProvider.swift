@@ -65,7 +65,8 @@ public struct AppleOAuthProvider {
     public func signInURL(
         state: String? = nil,
         usePKCE: Bool = true,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        scopes: [String] = []
     ) throws -> (url: URL, codeVerifier: String?) {
 
         var codeVerifier: String? = nil
@@ -83,10 +84,11 @@ public struct AppleOAuthProvider {
         // Add Apple-specific parameters
         params["response_mode"] = "form_post"
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: params
+            additionalParameters: params,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
@@ -190,9 +192,6 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
     /// Redirect URI registered with Apple
     public var redirectURI: String?
 
-    /// Requested scopes
-    public var scopes: [String]
-
     /// Logger used for AppleOAuth2Client operations
     public var logger: Logging.Logger
 
@@ -221,7 +220,6 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         keyID: String,
         privateKey: String,
         redirectURI: String? = nil,
-        scopes: [String] = [],
         jwksURL: String,
         logger: Logger = Logger(label: "com.oauthkit.AppleOAuth2Client")
     ) async throws {
@@ -232,7 +230,6 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         self.tokenEndpoint = AppleOAuthProvider.Endpoints.token
         self.authorizationEndpoint = AppleOAuthProvider.Endpoints.authorization
         self.redirectURI = redirectURI
-        self.scopes = scopes
         self.logger = logger
 
         self.teamID = teamID
@@ -253,6 +250,7 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
 
         return try await getToken(
             code: code,
+            codeVerifier: nil,
             additionalParameters: [
                 "client_secret": try await jwtKeys.sign(secret, kid: jwkIdentifier)
             ]

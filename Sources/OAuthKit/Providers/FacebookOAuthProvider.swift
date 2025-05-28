@@ -55,11 +55,12 @@ public struct FacebookOAuthProvider: Sendable {
     ///   - displayMode: The display mode for the Facebook authentication dialog
     ///   - additionalParameters: Additional parameters to include in the authorization URL
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         usePKCE: Bool = true,
         displayMode: FacebookDisplayMode? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        scopes: [String] = ["email", "public_profile"]
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -82,10 +83,11 @@ public struct FacebookOAuthProvider: Sendable {
         // Facebook recommends including auth_type=rerequest to handle cases where user previously denied permissions
         params["auth_type"] = "rerequest"
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: params
+            additionalParameters: params,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
@@ -98,11 +100,13 @@ public struct FacebookOAuthProvider: Sendable {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        additionalParameters: [String: String] = [:]
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            additionalParameters: additionalParameters
         )
     }
 

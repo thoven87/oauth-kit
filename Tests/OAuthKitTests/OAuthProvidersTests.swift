@@ -34,11 +34,13 @@ struct OAuthProvidersTests {
             clientSecret: "",
             redirectURI: redirectURI
         )
-        let lp = try googleProvider.generateAuthURL()
+        let lp = try googleProvider.generateAuthURL(
+            scopes: ["openid", "email"]
+        )
         #expect(lp.codeVerifier != nil)
         #expect(lp.url.absoluteString.contains("code_challenge"))
     }
-
+    ///   - scope: The requested scopes (space-separated)
     //    @Test("Microsoft Provider Creation")
     //    func testMicrosoftProviderCreation() async throws {
     //        let microsoftProvider = try await oauthKit.microsoftProvider(
@@ -93,7 +95,7 @@ struct OAuthProvidersTests {
             clientSecret: "",
             redirectURI: redirectURI
         )
-        let signInURL = try slackProvider.signInURL()
+        let signInURL = try slackProvider.generateAuthorizationURL()
         #expect(signInURL.url.absoluteString.contains("redirect_uri"))
         #expect(signInURL.url.absoluteString.contains("client_id"))
         #expect(signInURL.codeVerifier != nil)
@@ -106,7 +108,7 @@ struct OAuthProvidersTests {
             appSecret: "",
             redirectURI: redirectURI
         )
-        let signInURL = try facebookProvider.signInURL()
+        let signInURL = try facebookProvider.generateAuthorizationURL()
         #expect(signInURL.url.absoluteString.contains("redirect_uri"))
         #expect(signInURL.url.absoluteString.contains("client_id"))
         #expect(signInURL.codeVerifier != nil)
@@ -150,7 +152,8 @@ struct OAuthProvidersTests {
 
         let (url, codeVerifier) = try googleProvider.generateAuthURL(
             state: "test-state",
-            prompt: .selectAccount
+            prompt: .selectAccount,
+            scopes: []
         )
 
         #expect(url.absoluteString.contains("accounts.google.com"))
@@ -186,7 +189,7 @@ struct OAuthProvidersTests {
             redirectURI: redirectURI
         )
 
-        let (url, codeVerifier) = try facebookProvider.signInURL(
+        let (url, codeVerifier) = try facebookProvider.generateAuthorizationURL(
             state: "test-state",
             displayMode: .page
         )
@@ -206,7 +209,7 @@ struct OAuthProvidersTests {
             redirectURI: redirectURI
         )
 
-        let (url, codeVerifier) = try slackProvider.signInURL(
+        let (url, codeVerifier) = try slackProvider.generateAuthorizationURL(
             state: "test-state"
         )
 
@@ -224,7 +227,7 @@ struct OAuthProvidersTests {
             clientSecret: "ZXhhbXBsZS1hcHAtc2VjcmV0",
             redirectURI: redirectURI
         )
-        let signInURL = try keycloakProvider.signInURL()
+        let signInURL = try keycloakProvider.generateAuthorizationURL()
         #expect(signInURL.url.absoluteString.contains("realm"))
         #expect(signInURL.url.absoluteString.contains("client_id"))
         #expect(signInURL.url.absoluteString.contains("code"))

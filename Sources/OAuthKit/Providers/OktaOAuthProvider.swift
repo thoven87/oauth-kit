@@ -58,13 +58,15 @@ public struct OktaOAuthProvider: Sendable {
     ///   - prompt: Controls the Okta sign-in prompt behavior
     ///   - idpID: The identity provider ID to bypass the Okta sign-in page and go directly to the specified IdP
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         nonce: String? = nil,
         prompt: OktaPrompt? = nil,
         idpID: String? = nil,
-        usePKCE: Bool = true
+        usePKCE: Bool = true,
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) async throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -93,10 +95,11 @@ public struct OktaOAuthProvider: Sendable {
         }
 
         // Okta uses OIDC standard flow, so we can leverage the OpenIDConnectClient
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParams
+            additionalParameters: additionalParams,
+            scopes: scopes
         )
 
         return (url, codeVerifier)

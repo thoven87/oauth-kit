@@ -39,9 +39,6 @@ public protocol OAuth2ClientProtocol: Sendable {
     /// Redirect URI registered with the OAuth2 provider
     var redirectURI: String? { get set }
 
-    /// Requested scopes
-    var scopes: [String] { get set }
-
     /// Logger used for OAuth operations
     var logger: Logger { get set }
 
@@ -52,7 +49,6 @@ public protocol OAuth2ClientProtocol: Sendable {
         tokenEndpoint: String,
         authorizationEndpoint: String?,
         redirectURI: String?,
-        scopes: [String],
         logger: Logger
     )
 }
@@ -74,9 +70,8 @@ extension OAuth2ClientProtocol {
         clientID: String,
         clientSecret: String,
         tokenEndpoint: String,
-        authorizationEndpoint: String? = nil,
-        redirectURI: String? = nil,
-        scopes: [String] = [],
+        authorizationEndpoint: String?,
+        redirectURI: String?,
         logger: Logger = Logger(label: "com.oauthkit.OAuth2Client")
     ) {
         self.init(
@@ -86,7 +81,6 @@ extension OAuth2ClientProtocol {
             tokenEndpoint: tokenEndpoint,
             authorizationEndpoint: authorizationEndpoint,
             redirectURI: redirectURI,
-            scopes: scopes,
             logger: logger
         )
     }
@@ -97,13 +91,15 @@ extension OAuth2ClientProtocol {
     ///   - codeChallenge: PKCE code challenge (if using PKCE)
     ///   - codeChallengeMethod: PKCE code challenge method (e.g., "S256")
     ///   - additionalParameters: Additional query parameters to include in the URL
+    ///   - scopes: The requested scopes
     /// - Returns: The authorization URL
     /// - Throws: OAuth2Error if the authorization endpoint is not configured
-    public func authorizationURL(
-        state: String? = nil,
-        codeChallenge: String? = nil,
+    public func generateAuthorizationURL(
+        state: String?,
+        codeChallenge: String?,
         codeChallengeMethod: OAuthCodeChallengeMethod? = .s256,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String],
+        scopes: [String]
     ) throws -> URL {
         guard let authorizationEndpoint = authorizationEndpoint else {
             throw OAuth2Error.configurationError("Authorization endpoint is required but not configured")
@@ -164,8 +160,8 @@ extension OAuth2ClientProtocol {
     /// - Throws: OAuth2Error if the token exchange fails
     public func getToken(
         code: String,
-        codeVerifier: String? = nil,
-        additionalParameters: [String: String] = [:]
+        codeVerifier: String?,
+        additionalParameters: [String: String]
     ) async throws -> TokenResponse {
         guard let redirectURI = redirectURI else {
             throw OAuth2Error.configurationError("Redirect URI is required for authorization code exchange but not configured")
@@ -196,7 +192,8 @@ extension OAuth2ClientProtocol {
     /// - Returns: The token response
     /// - Throws: OAuth2Error if the token request fails
     public func clientCredentials(
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String],
+        scopes: [String]
     ) async throws -> TokenResponse {
         var parameters = [
             "grant_type": "client_credentials",
@@ -224,7 +221,7 @@ extension OAuth2ClientProtocol {
     /// - Throws: OAuth2Error if the token refresh fails
     public func refreshToken(
         _ refreshToken: String,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String]
     ) async throws -> TokenResponse {
         var parameters = [
             "grant_type": "refresh_token",

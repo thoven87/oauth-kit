@@ -50,13 +50,15 @@ public struct MicrosoftOAuthProvider: Sendable {
     ///   - loginHint: Email address to pre-fill the authentication screen
     ///   - domainHint: Hint about the domain/tenant the user should use to sign in
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         prompt: MicrosoftPrompt? = nil,
         loginHint: String? = nil,
         domainHint: MicrosoftDomainHint? = nil,
-        usePKCE: Bool = true
+        usePKCE: Bool = true,
+        scopes: [String] = ["openid", "profile", "email", "offline_access", "User.Read"]
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
         var codeVerifier: String? = nil
@@ -89,10 +91,11 @@ public struct MicrosoftOAuthProvider: Sendable {
         let nonce = UUID().uuidString
         additionalParams["nonce"] = nonce
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParams
+            additionalParameters: additionalParams,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
@@ -135,7 +138,7 @@ public struct MicrosoftOAuthProvider: Sendable {
         accessToken: String,
         endpoint: String,
         httpClient: HTTPClient = HTTPClient.shared,
-        logger: Logger = Logger(label: "com.oauthkit.MicrosoftOAuthProvider")
+        logger: Logger = Logger(label: "com.oauthkit.MicrosoftOAuthProvider.callGraphAPI")
     ) async throws -> [String: Any] {
         let apiEndpoint =
             endpoint.hasPrefix("/")
@@ -234,7 +237,6 @@ public struct MicrosoftUserProfile: Codable {
         case name
         case givenName = "given_name"
         case familyName = "family_name"
-        //case displayName = "name"
         case jobTitle
         case officeLocation
         case preferredLanguage

@@ -104,14 +104,12 @@ struct OpenIDConnectTests {
                 revocationEndpoint: nil
             ),
             redirectURI: "https://example.com/callback",
-            scopes: ["openid", "profile", "email"],
             logger: logger
         )
 
         #expect(client.clientID == clientID)
         #expect(client.clientSecret == clientSecret)
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scopes == ["openid", "profile", "email"])
         #expect(client.configuration.authorizationEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/auth")
         #expect(client.configuration.tokenEndpoint == "\(keycloakURL)/realms/test/protocol/openid-connect/token")
     }
@@ -125,7 +123,10 @@ struct OpenIDConnectTests {
             redirectURI: "http://localhost:5555/callback"
         )
 
-        let result = try client.authorizationURL(state: "hbkfjksdfhjksdfhjksdf")
+        let result = try client.generateAuthorizationURL(
+            state: "hbkfjksdfhjksdfhjksdf",
+            scopes: ["openid", "profile", "email"]
+        )
 
         #expect(result.absoluteString.contains("state=hbkfjksdfhjksdfhjksdf"))
 

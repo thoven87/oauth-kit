@@ -62,14 +62,16 @@ public struct AWSCognitoOAuthProvider {
     ///   - idpIdentifier: The identity provider identifier (alternative to identityProvider)
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
     ///   - cognitoDomain: Custom or default domain for login UI (required when using hosted UI)
+    ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         nonce: String? = nil,
         identityProvider: String? = nil,
         idpIdentifier: String? = nil,
         usePKCE: Bool = true,
         cognitoDomain: String? = nil,
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) throws -> (url: URL, codeVerifier: String?) {
 
         var codeVerifier: String? = nil
@@ -116,8 +118,8 @@ public struct AWSCognitoOAuthProvider {
             ]
 
             // Optional parameters
-            if !client.scopes.isEmpty {
-                queryItems.append(URLQueryItem(name: "scope", value: client.scopes.joined(separator: " ")))
+            if !scopes.isEmpty {
+                queryItems.append(URLQueryItem(name: "scope", value: scopes.joined(separator: " ")))
             }
 
             if let state = state {
@@ -126,7 +128,7 @@ public struct AWSCognitoOAuthProvider {
 
             if codeChallenge != nil {
                 queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
-                queryItems.append(URLQueryItem(name: "code_challenge_method", value: "S256"))
+                queryItems.append(URLQueryItem(name: "code_challenge_method", value: OAuthCodeChallengeMethod.s256.rawValue))
             }
 
             // Add additional parameters
@@ -143,10 +145,11 @@ public struct AWSCognitoOAuthProvider {
             return (url, codeVerifier)
         } else {
             // Use standard OIDC flow if no Cognito domain provided
-            let url = try client.authorizationURL(
+            let url = try client.generateAuthorizationURL(
                 state: state,
                 codeChallenge: codeChallenge,
-                additionalParameters: additionalParams
+                additionalParameters: additionalParams,
+                scopes: scopes
             )
 
             return (url, codeVerifier)
