@@ -108,7 +108,7 @@ struct OAuthProvidersTests {
             appSecret: "",
             redirectURI: redirectURI
         )
-        let signInURL = try facebookProvider.signInURL()
+        let signInURL = try facebookProvider.generateAuthorizationURL()
         #expect(signInURL.url.absoluteString.contains("redirect_uri"))
         #expect(signInURL.url.absoluteString.contains("client_id"))
         #expect(signInURL.codeVerifier != nil)
@@ -189,7 +189,7 @@ struct OAuthProvidersTests {
             redirectURI: redirectURI
         )
 
-        let (url, codeVerifier) = try facebookProvider.signInURL(
+        let (url, codeVerifier) = try facebookProvider.generateAuthorizationURL(
             state: "test-state",
             displayMode: .page
         )
