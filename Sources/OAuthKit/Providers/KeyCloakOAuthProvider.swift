@@ -72,7 +72,7 @@ public struct KeyCloakOAuthProvider: Sendable {
 
     /// An OAuth2 client configured for KeyCloak
     private let client: OAuth2Client
-    
+
     public enum Prompt: String {
         case consent
         case create
