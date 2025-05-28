@@ -44,9 +44,6 @@ public struct OpenIDConnectClient: Sendable {
     /// The redirect URI registered with the OIDC provider
     internal let redirectURI: String?
 
-    /// The requested scopes (space-separated)
-    internal let scopes: [String]
-
     /// Initialize a new OpenID Connect client
     /// - Parameters:
     ///   - httpClient: The HTTP client used for making requests
@@ -54,7 +51,6 @@ public struct OpenIDConnectClient: Sendable {
     ///   - clientSecret: The client secret provided by the OIDC provider
     ///   - configuration: The OpenID Connect provider configuration
     ///   - redirectURI: The redirect URI registered with the OIDC provider
-    ///   - scope: The requested scopes (space-separated)
     ///   - logger: Logger used for OpenID Connect operations
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
@@ -62,7 +58,6 @@ public struct OpenIDConnectClient: Sendable {
         clientSecret: String,
         configuration: OpenIDConfiguration,
         redirectURI: String? = nil,
-        scopes: [String] = ["openid", "profile", "email", "offline_access"],
         logger: Logger = Logger(label: "com.oauthkit.OpenIDConnectClient")
     ) async throws {
         self.httpClient = httpClient
@@ -71,7 +66,7 @@ public struct OpenIDConnectClient: Sendable {
         self.logger = logger
         self.clientSecret = clientSecret
         self.redirectURI = redirectURI
-        self.scopes = scopes
+
         self.oauth2Client = OAuth2Client(
             httpClient: httpClient,
             clientID: clientID,
@@ -79,7 +74,6 @@ public struct OpenIDConnectClient: Sendable {
             tokenEndpoint: configuration.tokenEndpoint,
             authorizationEndpoint: configuration.authorizationEndpoint,
             redirectURI: redirectURI,
-            scopes: scopes,
             logger: logger
         )
         let jwks = try await Self.loadJWKS(httpClient: httpClient, jwksURI: configuration.jwksUri)
@@ -92,19 +86,22 @@ public struct OpenIDConnectClient: Sendable {
     ///   - codeChallenge: PKCE code challenge (if using PKCE)
     ///   - codeChallengeMethod: PKCE code challenge method (e.g., "S256")
     ///   - additionalParameters: Additional query parameters to include in the URL
+    ///   - scope: The requested scopes
     /// - Returns: The authorization URL
     /// - Throws: OAuth2Error if the authorization endpoint is not configured
-    public func authorizationURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         codeChallenge: String? = nil,
         codeChallengeMethod: OAuthCodeChallengeMethod? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        scopes: [String] = ["openid", "profile", "email", "offline_access"]
     ) throws -> URL {
-        try oauth2Client.authorizationURL(
+        try oauth2Client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            scopes: scopes
         )
     }
 

@@ -93,13 +93,11 @@ public struct KeyCloakOAuthProvider: Sendable {
     ///   - clientID: The client ID registered in KeyCloak
     ///   - clientSecret: The client secret from KeyCloak
     ///   - redirectURI: The redirect URI registered with KeyCloak
-    ///   - scopes: The requested scopes (default: "openid profile email")
     /// - Returns: An OpenID Connect client configured for KeyCloak
     public func createOpenIDConnectClient(
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email"]
+        redirectURI: String
     ) async throws -> OpenIDConnectClient {
 
         // Fetch OpenID configuration from KeyCloak discovery endpoint
@@ -111,7 +109,6 @@ public struct KeyCloakOAuthProvider: Sendable {
             clientSecret: clientSecret,
             configuration: config,
             redirectURI: redirectURI,
-            scopes: scopes,
             logger: oauthKit.logger
         )
     }
@@ -123,13 +120,15 @@ public struct KeyCloakOAuthProvider: Sendable {
     ///   - loginHint: Optional email/username hint for pre-filling the login form
     ///   - locale: Optional locale for the KeyCloak UI (e.g., "en")
     ///   - prompt: Optional prompt behavior (login, none, consent)
+    ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and PKCE code verifier (if used)
-    public func signInURL(
+    public func generateAuthorizationURL(
         state: String? = nil,
         usePKCE: Bool = true,
         loginHint: String? = nil,
         locale: String? = nil,
-        prompt: String? = nil
+        prompt: String? = nil,
+        scopes: [String] = ["openid", "profile", "email"]
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
 
@@ -156,10 +155,11 @@ public struct KeyCloakOAuthProvider: Sendable {
         }
 
         // Generate the authorization URL
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParams
+            additionalParameters: additionalParams,
+            scopes: scopes
         )
 
         return (url, codeVerifier)

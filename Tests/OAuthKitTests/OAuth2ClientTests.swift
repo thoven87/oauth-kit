@@ -31,7 +31,6 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scopes: ["test-scope"],
             logger: logger
         )
 
@@ -40,7 +39,6 @@ struct OAuth2ClientTests {
         #expect(client.tokenEndpoint == "https://example.com/token")
         #expect(client.authorizationEndpoint == "https://example.com/auth")
         #expect(client.redirectURI == "https://example.com/callback")
-        #expect(client.scopes.contains("test-scope"))
     }
 
     @Test("Authorization URL Generation")
@@ -52,12 +50,16 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: "https://example.com/auth",
             redirectURI: "https://example.com/callback",
-            scopes: ["test-scope"],
             logger: logger
         )
 
         // Basic URL
-        let basicURL = try client.authorizationURL()
+        let basicURL = try client.generateAuthorizationURL(
+            state: nil,
+            codeChallenge: nil,
+            additionalParameters: [:],
+            scopes: ["test-scope"]
+        )
         #expect(basicURL.absoluteString.hasPrefix("https://example.com/auth?"))
         #expect(basicURL.absoluteString.contains("client_id=test-client-id"))
         #expect(basicURL.absoluteString.contains("redirect_uri=https://example.com/callback"))
@@ -65,16 +67,31 @@ struct OAuth2ClientTests {
         #expect(basicURL.absoluteString.contains("scope=test-scope"))
 
         // URL with state
-        let stateURL = try client.authorizationURL(state: "test-state")
+        let stateURL = try client.generateAuthorizationURL(
+            state: "test-state",
+            codeChallenge: nil,
+            additionalParameters: [:],
+            scopes: []
+        )
         #expect(stateURL.absoluteString.contains("state=test-state"))
 
         // URL with PKCE
-        let pkceURL = try client.authorizationURL(codeChallenge: "test-challenge")
+        let pkceURL = try client.generateAuthorizationURL(
+            state: nil,
+            codeChallenge: "test-challenge",
+            additionalParameters: [:],
+            scopes: ["test-scope"]
+        )
         #expect(pkceURL.absoluteString.contains("code_challenge=test-challenge"))
         #expect(pkceURL.absoluteString.contains("code_challenge_method=S256"))
 
         // URL with additional parameters
-        let additionalParamsURL = try client.authorizationURL(additionalParameters: ["foo": "bar"])
+        let additionalParamsURL = try client.generateAuthorizationURL(
+            state: nil,
+            codeChallenge: nil,
+            additionalParameters: ["foo": "bar"],
+            scopes: ["test-scope"]
+        )
         #expect(additionalParamsURL.absoluteString.contains("foo=bar"))
     }
 
@@ -96,12 +113,16 @@ struct OAuth2ClientTests {
             tokenEndpoint: "https://example.com/token",
             authorizationEndpoint: nil,
             redirectURI: "https://example.com/callback",
-            scopes: ["test-scope"],
             logger: logger
         )
 
         do {
-            _ = try client.authorizationURL()
+            _ = try client.generateAuthorizationURL(
+                state: nil,
+                codeChallenge: nil,
+                additionalParameters: [:],
+                scopes: []
+            )
             #expect(Bool(false), "Expected error not thrown")
         } catch let error as OAuth2Error {
             switch error {

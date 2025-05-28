@@ -34,9 +34,6 @@ public struct OAuth2Client: OAuth2ClientProtocol {
     /// Redirect URI registered with the OAuth2 provider
     public var redirectURI: String?
 
-    /// Requested scopes
-    public var scopes: [String]
-
     /// Logger used for OAuth operations
     public var logger: Logging.Logger
 
@@ -48,16 +45,14 @@ public struct OAuth2Client: OAuth2ClientProtocol {
     ///   - tokenEndpoint: The OAuth2 token endpoint
     ///   - authorizationEndpoint:The OAuth2 authorization endpoint
     ///   - redirectURI: The redirect URI registered with the OAuth2 provider
-    ///   - scopes: The requested scopes
     ///   - logger: Logger used for OAuth2Client operations
     public init(
         httpClient: AsyncHTTPClient.HTTPClient = .shared,
         clientID: String,
         clientSecret: String,
         tokenEndpoint: String,
-        authorizationEndpoint: String? = nil,
-        redirectURI: String? = nil,
-        scopes: [String],
+        authorizationEndpoint: String?,
+        redirectURI: String?,
         logger: Logging.Logger = Logger(label: "com.oauthkit.OAuth2Client")
     ) {
         self.httpClient = httpClient
@@ -66,7 +61,6 @@ public struct OAuth2Client: OAuth2ClientProtocol {
         self.tokenEndpoint = tokenEndpoint
         self.authorizationEndpoint = authorizationEndpoint
         self.redirectURI = redirectURI
-        self.scopes = scopes
         self.logger = logger
     }
 }

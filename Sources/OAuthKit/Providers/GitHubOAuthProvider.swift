@@ -61,7 +61,8 @@ public struct GitHubOAuthProvider: Sendable {
     public func signInURL(
         state: String? = nil,
         usePKCE: Bool = true,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        scopes: [String] = ["read:user", "user:email"]
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -73,10 +74,11 @@ public struct GitHubOAuthProvider: Sendable {
             codeChallenge = pkce.codeChallenge
         }
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
@@ -89,11 +91,13 @@ public struct GitHubOAuthProvider: Sendable {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        additionalParameters: [String: String] = [:]
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            additionalParameters: additionalParameters
         )
     }
 

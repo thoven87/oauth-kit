@@ -28,7 +28,7 @@ public struct OAuthKit: Sendable {
     /// - Parameters:
     ///   - httpClient: The HTTP client used for making requests
     ///   - logger: Logger used for OAuth operations
-    public init(httpClient: HTTPClient = HTTPClient.shared, logger: Logger = Logger(label: "com.oauthkit")) {
+    public init(httpClient: HTTPClient = HTTPClient.shared, logger: Logger = Logger(label: "com.oauthkit.OAuthKit")) {
         self.httpClient = httpClient
         self.logger = logger
     }
@@ -47,8 +47,7 @@ public struct OAuthKit: Sendable {
         clientSecret: String,
         tokenEndpoint: String,
         authorizationEndpoint: String? = nil,
-        redirectURI: String? = nil,
-        scopes: [String]
+        redirectURI: String? = nil
     ) -> OAuth2Client {
         OAuth2Client(
             httpClient: httpClient,
@@ -57,7 +56,6 @@ public struct OAuthKit: Sendable {
             tokenEndpoint: tokenEndpoint,
             authorizationEndpoint: authorizationEndpoint,
             redirectURI: redirectURI,
-            scopes: scopes,
             logger: logger
         )
     }
@@ -68,14 +66,12 @@ public struct OAuthKit: Sendable {
     ///   - clientID: The client ID provided by the OIDC provider
     ///   - clientSecret: The client secret provided by the OIDC provider
     ///   - redirectURI: The redirect URI registered with the OIDC provider
-    ///   - scope: The requested scopes (space-separated, defaults to "openid")
     /// - Returns: An OpenID Connect client
     public func openIDConnectClient(
         discoveryURL: String,
         clientID: String,
         clientSecret: String,
-        redirectURI: String? = nil,
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        redirectURI: String? = nil
     ) async throws -> OpenIDConnectClient {
         // offline_access is also important as it will provide a refresh token
         let discovery = OpenIDDiscoveryService(httpClient: httpClient, logger: logger)
@@ -87,7 +83,6 @@ public struct OAuthKit: Sendable {
             clientSecret: clientSecret,
             configuration: configuration,
             redirectURI: redirectURI,
-            scopes: scopes,
             logger: self.logger
         )
     }
@@ -102,8 +97,7 @@ public struct OAuthKit: Sendable {
     public func googleProvider(
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["openid", "email", "profile", "offline_access"]
+        redirectURI: String
     ) async throws -> GoogleOAuthProvider {
         GoogleOAuthProvider(
             oauthKit: self,
@@ -111,8 +105,7 @@ public struct OAuthKit: Sendable {
                 discoveryURL: GoogleOAuthProvider.discoveryURL,
                 clientID: clientID,
                 clientSecret: clientSecret,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -123,13 +116,11 @@ public struct OAuthKit: Sendable {
     ///   - clientID: The client/application ID from Azure portal
     ///   - clientSecret: The client secret from Azure portal
     ///   - redirectURI: The redirect URI registered with Azure
-    ///   - scopes: The requested scopes (defaults to basic profile)
     /// - Returns: A Microsoft OAuth provider
     public func microsoftMultiTenantProvider(
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email", "offline_access", "User.Read"]
+        redirectURI: String
     ) async throws -> MicrosoftOAuthProvider {
         MicrosoftOAuthProvider(
             oauthKit: self,
@@ -137,8 +128,7 @@ public struct OAuthKit: Sendable {
                 discoveryURL: MicrosoftOAuthProvider.commonDiscoveryURL,
                 clientID: clientID,
                 clientSecret: clientSecret,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -149,14 +139,12 @@ public struct OAuthKit: Sendable {
     ///   - clientSecret: The client secret from Azure portal
     ///   - tenantID: The Azure AD tenant ID
     ///   - redirectURI: The redirect URI registered with Azure
-    ///   - scopes: The requested scopes (defaults to basic profile)
     /// - Returns: An OpenID Connect client configured for Microsoft
     public func microsoftProvider(
         clientID: String,
         clientSecret: String,
         tenantID: String,
-        redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        redirectURI: String
     ) async throws -> MicrosoftOAuthProvider {
         MicrosoftOAuthProvider(
             oauthKit: self,
@@ -164,8 +152,7 @@ public struct OAuthKit: Sendable {
                 discoveryURL: MicrosoftOAuthProvider.tenantDiscoveryURL(tenantID: tenantID),
                 clientID: clientID,
                 clientSecret: clientSecret,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -180,8 +167,7 @@ public struct OAuthKit: Sendable {
     public func githubProvider(
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["read:user", "user:email"]
+        redirectURI: String
     ) -> GitHubOAuthProvider {
         GitHubOAuthProvider(
             oauthKit: self,
@@ -190,8 +176,7 @@ public struct OAuthKit: Sendable {
                 clientSecret: clientSecret,
                 tokenEndpoint: GitHubOAuthProvider.Endpoints.token,
                 authorizationEndpoint: GitHubOAuthProvider.Endpoints.authorization,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -204,8 +189,7 @@ public struct OAuthKit: Sendable {
         keyID: String,
         privateKey: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["name", "email"]
+        redirectURI: String
     ) async throws -> AppleOAuthProvider {
         AppleOAuthProvider(
             oauthKit: self,
@@ -217,7 +201,6 @@ public struct OAuthKit: Sendable {
                 keyID: keyID,
                 privateKey: privateKey,
                 redirectURI: redirectURI,
-                scopes: scopes,
                 jwksURL: AppleOAuthProvider.Endpoints.jwks,
                 logger: logger
             )
@@ -229,13 +212,11 @@ public struct OAuthKit: Sendable {
     ///   - clientID: The Slack  client ID
     ///   - clientSecret: The  Slack client secret
     ///   - redirectURI: The redirect URI registered with Slack
-    ///   - scopes: The requested scopes
     /// - Returns: A Slack OAuth provider
     public func slackProvider(
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["identity.basic", "chat:write", "channels:read", "incoming-webhook", "users:read"]
+        redirectURI: String
     ) -> SlackOAuthProvider {
         SlackOAuthProvider(
             oauthKit: self,
@@ -244,7 +225,6 @@ public struct OAuthKit: Sendable {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI,
-                scopes: scopes
             )
         )
     }
@@ -254,13 +234,11 @@ public struct OAuthKit: Sendable {
     ///   - appID: The application ID from Facebook
     ///   - appSecret: The application secret from Facebook
     ///   - redirectURI: The redirect URI registered with Facebook
-    ///   - scopes: The requested permissions
     /// - Returns: A Facebook OAuth provider
     public func facebookProvider(
         appID: String,
         appSecret: String,
         redirectURI: String,
-        scopes: [String] = ["email", "public_profile"]
     ) -> FacebookOAuthProvider {
         FacebookOAuthProvider(
             oauthKit: self,
@@ -270,8 +248,7 @@ public struct OAuthKit: Sendable {
                 clientSecret: appSecret,
                 tokenEndpoint: FacebookOAuthProvider.Endpoints.token,
                 authorizationEndpoint: FacebookOAuthProvider.Endpoints.authorization,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -291,7 +268,6 @@ public struct OAuthKit: Sendable {
         clientID: String,
         clientSecret: String,
         redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email", "offline_access"],
         useCustomAuth: Bool = false,
         authServerId: String = "default"
     ) async throws -> OktaOAuthProvider {
@@ -303,8 +279,7 @@ public struct OAuthKit: Sendable {
                 discoveryURL: discoveryURL,
                 clientID: clientID,
                 clientSecret: clientSecret,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }
@@ -325,7 +300,6 @@ public struct OAuthKit: Sendable {
         clientID: String,
         clientSecret: String? = nil,
         redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email"],
         domain: String? = nil
     ) async throws -> AWSCognitoOAuthProvider {
 
@@ -338,8 +312,7 @@ public struct OAuthKit: Sendable {
             discoveryURL: discoveryURL,
             clientID: clientID,
             clientSecret: effectiveSecret,
-            redirectURI: redirectURI,
-            scopes: scopes
+            redirectURI: redirectURI
         )
 
         return AWSCognitoOAuthProvider(oauthKit: self, openIDConnectClient: client)
@@ -351,8 +324,7 @@ public struct OAuthKit: Sendable {
         endpoints: KeyCloakOAuthProvider.Endpoints,
         clientID: String,
         clientSecret: String,
-        redirectURI: String,
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        redirectURI: String
     ) -> KeyCloakOAuthProvider {
         KeyCloakOAuthProvider(
             oauthKit: self,
@@ -363,8 +335,7 @@ public struct OAuthKit: Sendable {
                 clientSecret: clientSecret,
                 tokenEndpoint: endpoints.token,
                 authorizationEndpoint: endpoints.authorization,
-                redirectURI: redirectURI,
-                scopes: scopes
+                redirectURI: redirectURI
             )
         )
     }

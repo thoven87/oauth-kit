@@ -59,7 +59,8 @@ public struct GoogleOAuthProvider: Sendable {
         loginHint: String? = nil,
         usePKCE: Bool = true,
         accessType: TokenAccessType = .offline,
-        includeGrantedScopes: Bool = true
+        includeGrantedScopes: Bool = true,
+        scopes: [String]
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
         var codeVerifier: String? = nil
@@ -89,10 +90,11 @@ public struct GoogleOAuthProvider: Sendable {
         let nonce = UUID().uuidString
         additionalParams["nonce"] = nonce
 
-        let url = try client.authorizationURL(
+        let url = try client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
-            additionalParameters: additionalParams
+            additionalParameters: additionalParams,
+            scopes: scopes
         )
 
         return (url, codeVerifier)
