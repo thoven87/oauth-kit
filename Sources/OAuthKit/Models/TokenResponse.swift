@@ -15,7 +15,7 @@
 import Foundation
 
 /// Response from an OAuth2 token endpoint
-public struct TokenResponse: Codable {
+public struct TokenResponse: Codable, Sendable {
     /// The access token string
     public let accessToken: String
 
