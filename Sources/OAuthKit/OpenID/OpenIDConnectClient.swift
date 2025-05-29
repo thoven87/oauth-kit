@@ -571,7 +571,7 @@ public struct IDTokenClaims: JWTPayload, Equatable {
 }
 
 /// Dynamic coding keys for handling custom claims
-private struct DynamicCodingKeys: CodingKey {
+internal struct DynamicCodingKeys: CodingKey {
     var stringValue: String
     var intValue: Int?
 

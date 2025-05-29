@@ -8,6 +8,7 @@ A Swift OAuth2 and OpenID Connect client library with modern async/await support
 - OAuth 2.0 client credentials flow
 - OpenID Connect support with JWT validation
 - Google Sign-In integration
+- Google Service Account authentication
 - Microsoft 365 / Azure AD Sign-In integration
 - Sign-in with Apple
 - Sign-in with Slack
@@ -125,6 +126,158 @@ let profile = try await googleProvider.getUserProfile(
 print("Authenticated user: \(profile.name ?? "Unknown")")
 print("Email: \(profile.email ?? "Not provided")")
 print("Picture URL: \(profile.picture ?? "None")")
+```
+
+### Google Service Account Authentication
+
+For server-to-server authentication without user interaction. There are three ways to authenticate:
+
+#### Method 1: Using GoogleServiceAccountCredentials object
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthKit()
+
+// Load service account credentials from JSON string
+let serviceAccountJSON = """
+{
+    "type": "service_account",
+    "project_id": "your-project-id",
+    "private_key_id": "your-private-key-id",
+    "private_key": "-----BEGIN PRIVATE KEY-----\\nYour-Private-Key\\n-----END PRIVATE KEY-----\\n",
+    "client_email": "your-service-account@your-project-id.iam.gserviceaccount.com",
+    "client_id": "your-client-id",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/your-service-account%40your-project-id.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+}
+"""
+
+let credentials = try GoogleServiceAccountCredentials(from: serviceAccountJSON)
+
+// Create Google provider
+let provider = try await oauthKit.googleProvider(
+    clientID: "dummy",
+    clientSecret: "dummy",
+    redirectURI: "http://localhost"
+)
+
+// Authenticate with service account
+let scopes = [
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/bigquery"
+]
+
+let tokenResponse = try await provider.authenticateWithServiceAccount(
+    credentials: credentials,
+    scopes: scopes
+)
+
+print("Service account access token: \(tokenResponse.accessToken)")
+```
+
+#### Method 2: Using JSON string directly (Convenience method)
+
+```swift
+// Authenticate directly with JSON string
+let tokenResponse = try await provider.authenticateWithServiceAccount(
+    credentialsJSON: serviceAccountJSON,
+    scopes: scopes
+)
+
+print("Service account access token: \(tokenResponse.accessToken)")
+```
+
+#### Method 3: Using file path (Convenience method, Recommended)
+
+```swift
+// Authenticate using file path
+let tokenResponse = try await provider.authenticateWithServiceAccount(
+    credentialsFilePath: "/path/to/service-account.json",
+    scopes: scopes
+)
+
+)
+```
+
+#### Method 4: Direct JWT Authentication (No Token Exchange)
+
+For more efficient authentication, you can create JWTs directly without token exchange:
+
+```swift
+// Create JWT for Google Cloud Storage API
+let jwt = try await provider.createServiceAccountJWTToken(
+    credentials: credentials,
+    audience: "https://storage.googleapis.com/"
+)
+
+// Use JWT directly in API calls
+var request = HTTPClientRequest(url: "https://storage.googleapis.com/storage/v1/b?project=your-project-id")
+request.headers.add(name: "Authorization", value: "Bearer \(jwt)")
+
+// Direct JWT with JSON string
+let jwtFromJSON = try await provider.createServiceAccountJWTToken(
+    credentialsJSON: serviceAccountJSON,
+    audience: "https://bigquery.googleapis.com/"
+)
+
+// Direct JWT with file path
+let jwtFromFile = try await provider.createServiceAccountJWTToken(
+    credentialsFilePath: "/path/to/service-account.json",
+    audience: "https://www.googleapis.com/auth/cloud-platform"
+)
+
+// Direct JWT with additional claims
+let customJWT = try await provider.createServiceAccountJWTToken(
+    credentials: credentials,
+    audience: "https://your-api.googleapis.com/",
+    additionalClaims: [
+        "department": "engineering",
+        "role": "service"
+    ]
+)
+```
+
+#### Domain-Wide Delegation
+
+All methods support domain-wide delegation by adding a `subject` parameter:
+
+```swift
+// Using credentials object
+let delegatedTokenResponse1 = try await provider.authenticateWithServiceAccount(
+    credentials: credentials,
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    subject: "user@yourdomain.com"
+)
+
+// Using JSON string
+let delegatedTokenResponse2 = try await provider.authenticateWithServiceAccount(
+    credentialsJSON: serviceAccountJSON,
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    subject: "user@yourdomain.com"
+)
+
+// Using file path
+let delegatedTokenResponse3 = try await provider.authenticateWithServiceAccount(
+    credentialsFilePath: "/path/to/service-account.json",
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    subject: "user@yourdomain.com"
+)
+
+// Direct JWT with domain-wide delegation
+let delegatedJWT = try await provider.createServiceAccountJWTToken(
+    credentials: credentials,
+    audience: "https://www.googleapis.com/auth/gmail.readonly",
+    subject: "user@yourdomain.com"
+)
+
+// Use JWT directly for Gmail API
+var gmailRequest = HTTPClientRequest(url: "https://gmail.googleapis.com/gmail/v1/users/me/messages")
+gmailRequest.headers.add(name: "Authorization", value: "Bearer \(delegatedJWT)")
 ```
 
 ### Microsoft 365 / Azure AD Sign-In
@@ -277,6 +430,26 @@ if tokenResponse.isExpired() {
 7. Add your authorized redirect URIs (e.g., `https://your-app.example.com/google-callback`)
 8. Click "Create"
 9. Copy your Client ID and Client Secret for use with OAuthKit
+
+## Setting Up Google Service Account
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to "IAM & Admin" > "Service Accounts"
+3. Click "Create Service Account"
+4. Fill in the service account details
+5. Grant necessary roles/permissions to the service account
+6. Click "Create and Continue"
+7. Click "Done" to finish creating the service account
+8. Click on the created service account
+9. Go to the "Keys" tab
+10. Click "Add Key" > "Create new key"
+11. Select "JSON" format and click "Create"
+12. Download and securely store the JSON key file
+
+For domain-wide delegation (optional):
+1. In the service account details, enable "Domain-wide delegation"
+2. In Google Workspace Admin Console, go to Security > API Controls > Domain-wide Delegation
+3. Add the service account's client ID with required scopes
 
 ## Setting Up Microsoft 365 / Azure AD Sign-In
 
