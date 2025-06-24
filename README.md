@@ -103,7 +103,7 @@ let googleProvider = try await oauthKit.googleProvider(
 )
 
 // Generate a Google Sign-In URL with recommended parameters
-let (googleAuthURL, googleCodeVerifier) = try googleProvider.generateAuthorizationURL(
+let (googleAuthURL, googleCodeVerifier) = try googleProvider.generateAuthURL(
     state: UUID().uuidString,
     prompt: .selectAccount, // Force account selection screen
     loginHint: "user@example.com" // Optional: pre-fill email,
