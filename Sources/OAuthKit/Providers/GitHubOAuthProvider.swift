@@ -35,7 +35,7 @@ public struct GitHubOAuthProvider: Sendable {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// An OAuth2 client configured for GitHub
     private let client: OAuth2Client
@@ -44,7 +44,7 @@ public struct GitHubOAuthProvider: Sendable {
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter oauth2Client:  An OAuth2 client configured for GitHub
     public init(
-        oauthKit: OAuthKit,
+        oauthKit: OAuthClientFactory,
         oauth2Client client: OAuth2Client
     ) {
         self.oauthKit = oauthKit

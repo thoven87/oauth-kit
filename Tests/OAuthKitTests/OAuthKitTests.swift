@@ -22,7 +22,7 @@ import Testing
 @Suite("OAuthKit Core Tests")
 struct OAuthKitTests {
     static let logger = Logger(label: "OAuthKitTests")
-    let oauthKit = OAuthKit(httpClient: .shared, logger: logger)
+    let oauthKit = OAuthClientFactory(httpClient: .shared, logger: logger)
 
     @Test("OAuth2 Client Creation")
     func testOAuth2ClientCreation() {

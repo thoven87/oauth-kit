@@ -34,7 +34,7 @@ public struct SlackOAuthProvider {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// SlackOAuthClient
     private let client: SlackOAuth2Client
@@ -42,7 +42,7 @@ public struct SlackOAuthProvider {
     /// Initialize a new Slack OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter client: A SlackOAuth2Client instance
-    internal init(oauthKit: OAuthKit, client: SlackOAuth2Client) {
+    internal init(oauthKit: OAuthClientFactory, client: SlackOAuth2Client) {
         self.oauthKit = oauthKit
         self.client = client
     }

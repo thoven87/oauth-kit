@@ -17,7 +17,7 @@ import Foundation
 import Logging
 
 /// Main entry point for OAuthKit functionality
-public struct OAuthKit: Sendable {
+public struct OAuthClientFactory: Sendable {
     /// The HTTP client used for making requests
     internal let httpClient: HTTPClient
 
