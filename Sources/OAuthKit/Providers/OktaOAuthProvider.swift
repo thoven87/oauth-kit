@@ -20,14 +20,14 @@ import NIOFoundationCompat
 /// Provider for Okta OAuth2/OpenID Connect authentication
 public struct OktaOAuthProvider: Sendable {
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// An OpenID Connect client configured for Okta
     private let client: OpenIDConnectClient
 
     /// Initialize a new Okta OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
-    internal init(oauthKit: OAuthKit, client: OpenIDConnectClient) {
+    internal init(oauthKit: OAuthClientFactory, client: OpenIDConnectClient) {
         self.oauthKit = oauthKit
         self.client = client
     }

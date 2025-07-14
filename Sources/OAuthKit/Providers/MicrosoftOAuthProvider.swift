@@ -30,7 +30,7 @@ public struct MicrosoftOAuthProvider: Sendable {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// The OpenID Connect client configured for Microsoft
     private let client: OpenIDConnectClient
@@ -38,7 +38,7 @@ public struct MicrosoftOAuthProvider: Sendable {
     /// Initialize a new Microsoft OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter openIDConnectClient: The OpenID Connect client configured for Microsoft
-    internal init(oauthKit: OAuthKit, openIDConnectClient client: OpenIDConnectClient) {
+    internal init(oauthKit: OAuthClientFactory, openIDConnectClient client: OpenIDConnectClient) {
         self.oauthKit = oauthKit
         self.client = client
     }

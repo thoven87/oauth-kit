@@ -53,8 +53,8 @@ And then add the dependency to your target:
 ```swift
 import OAuthKit
 
-// Initialize OAuthKit
-let oauthKit = OAuthKit()
+// Initialize OAuth
+let oauthClient = OAuthClientFactory()
 
 // Create an OAuth2 client
 let oauth2Client = oauthKit.oauth2Client(
@@ -93,10 +93,10 @@ print("Access token: \(tokenResponse.accessToken)")
 import OAuthKit
 
 // Initialize OAuthKit
-let oauthKit = OAuthKit()
+let oauthClient = OAuthClientFactory()
 
 // Create Google OAuth provider
-let googleProvider = try await oauthKit.googleProvider(
+let googleProvider = try await oauthClient.googleProvider(
     clientID: "some-client-id",  // From Google Cloud Console
     clientSecret: "some-client-secret", // From Google Cloud Console
     redirectURI: "https://example.com/callback" // Must match Google Console
@@ -138,7 +138,7 @@ For server-to-server authentication without user interaction. There are three wa
 import OAuthKit
 
 // Initialize OAuthKit
-let oauthKit = OAuthKit()
+let oauthKit = OAuthClientFactory()
 
 // Load service account credentials from JSON string
 let serviceAccountJSON = """
@@ -284,7 +284,7 @@ gmailRequest.headers.add(name: "Authorization", value: "Bearer \(delegatedJWT)")
 
 ```swift
 // Initialize OAuthKit
-let oauthKit = OAuthKit()
+let oauthKit = OAuthClientFactory()
 
 // Create Microsoft OAuth provider
 // For multi-tenant applications (works with any Microsoft account):
@@ -345,7 +345,7 @@ print("Graph API data: \(graphData)")
 
 ```swift
 // Initialize OAuthKit
-let oauthKit = OAuthKit()
+let oauthKit = OAuthClientFactory()
 
 // Create an OpenID Connect client with auto-discovery
 let oidcClient = try await oauthKit.openIDConnectClient(
@@ -389,7 +389,7 @@ print("User info: \(userInfo)")
 
 ```swift
 // Initialize OAuthKit
-let oauthKit = OAuthKit()
+let oauthKit = OAuthClientFactory()
 
 // Create an OAuth2 client for client credentials flow
 let oauth2Client = oauthKit.oauth2Client(

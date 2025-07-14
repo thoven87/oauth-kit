@@ -23,12 +23,12 @@ import Testing
 @Suite("Google Service Account Tests")
 struct GoogleServiceAccountTests {
 
-    let oauthKit: OAuthKit
+    let oauthKit: OAuthClientFactory
     let logger: Logger
 
     init() {
         self.logger = Logger(label: "GoogleServiceAccountTests")
-        self.oauthKit = OAuthKit(httpClient: .shared, logger: logger)
+        self.oauthKit = OAuthClientFactory(httpClient: .shared, logger: logger)
     }
 
     @Test("Parse Google Service Account Credentials from JSON")

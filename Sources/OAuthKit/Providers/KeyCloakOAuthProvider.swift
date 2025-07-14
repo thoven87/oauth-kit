@@ -65,7 +65,7 @@ public struct KeyCloakOAuthProvider: Sendable {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// KeyCloakBaseURL configured
     private let endpoints: Endpoints
@@ -87,7 +87,7 @@ public struct KeyCloakOAuthProvider: Sendable {
     ///   - endpoints: The Enpoints instance with base url
     ///   - client: An Oauth2Client
     internal init(
-        oauthKit: OAuthKit,
+        oauthKit: OAuthClientFactory,
         endpoints: Endpoints,
         client: OAuth2Client
     ) {

@@ -22,7 +22,7 @@ import Testing
 @Suite("OpenID Connect Tests")
 struct OpenIDConnectTests {
     var logger: Logger = Logger(label: "OpenIDConnectTests")
-    var oauthKit: OAuthKit = OAuthKit(httpClient: .shared, logger: Logger(label: "OAuthKitTest"))
+    var oauthKit: OAuthClientFactory = OAuthClientFactory(httpClient: .shared, logger: Logger(label: "OAuthKitTest"))
 
     private let keycloakURL = ProcessInfo.processInfo.environment["KEYCLOAK_URL"] ?? "http://localhost:8080"
     private let redirectURI = "http://localhost:8080/callback"

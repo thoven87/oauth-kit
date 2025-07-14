@@ -20,7 +20,7 @@ import NIOFoundationCompat
 /// Provider for AWS Cognito OAuth2/OpenID Connect authentication
 public struct AWSCognitoOAuthProvider {
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// An OpenID Connect client configured for AWS Cognito
     private let client: OpenIDConnectClient
@@ -29,7 +29,7 @@ public struct AWSCognitoOAuthProvider {
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter openIDConnectClient: The OpenID Connect client configured for AWS Cognito
     internal init(
-        oauthKit: OAuthKit,
+        oauthKit: OAuthClientFactory,
         openIDConnectClient client: OpenIDConnectClient
     ) {
         self.oauthKit = oauthKit

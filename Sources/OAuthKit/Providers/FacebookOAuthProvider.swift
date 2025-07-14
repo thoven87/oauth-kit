@@ -36,14 +36,14 @@ public struct FacebookOAuthProvider: Sendable {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// The OAuth2 client configured for Facebook
     private let client: OAuth2Client
 
     /// Initialize a new Facebook OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
-    public init(oauthKit: OAuthKit, client: OAuth2Client) {
+    public init(oauthKit: OAuthClientFactory, client: OAuth2Client) {
         self.oauthKit = oauthKit
         self.client = client
     }

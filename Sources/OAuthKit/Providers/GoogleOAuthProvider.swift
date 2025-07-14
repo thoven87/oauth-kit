@@ -26,7 +26,7 @@ public struct GoogleOAuthProvider: Sendable {
     public static let discoveryURL = "https://accounts.google.com/"
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// The OpenID Connect client configured for Google
     private let client: OpenIDConnectClient
@@ -40,7 +40,7 @@ public struct GoogleOAuthProvider: Sendable {
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter openIDConnectClient: An OpenID Connect client configured for Google
     public init(
-        oauthKit: OAuthKit,
+        oauthKit: OAuthClientFactory,
         openIDConnectClient client: OpenIDConnectClient
     ) {
         self.oauthKit = oauthKit

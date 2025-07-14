@@ -39,7 +39,7 @@ public struct AppleOAuthProvider {
     }
 
     /// The OAuthKit instance
-    private let oauthKit: OAuthKit
+    private let oauthKit: OAuthClientFactory
 
     /// An OAuth2 client configured for Apple
     private var client: AppleOAuth2Client
@@ -66,7 +66,7 @@ public struct AppleOAuthProvider {
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter client: An OAuth2 client configured for Apple
     public init(
-        oauthKit: OAuthKit,
+        oauthKit: OAuthClientFactory,
         client: AppleOAuth2Client
     ) {
         self.oauthKit = oauthKit
