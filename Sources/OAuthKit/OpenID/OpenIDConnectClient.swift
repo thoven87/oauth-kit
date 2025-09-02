@@ -235,7 +235,6 @@ public struct OpenIDConnectClient: Sendable {
     /// - Returns: The validated ID token claims
     /// - Throws: OAuth2Error if validation fails
     public func validateIDToken(_ idToken: String) async throws -> IDTokenClaims {
-        logger.info("ID token validation started \(idToken)")
         guard let signers = jwtSigners else {
             throw OAuth2Error.jwksError("Failed to load JWT signers")
         }
