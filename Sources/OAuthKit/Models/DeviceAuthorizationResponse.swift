@@ -66,10 +66,30 @@ public struct DeviceAuthorizationResponse: Codable, Sendable {
         case expiresIn = "expires_in"
         case interval
     }
+
+    /// Expiration date calculated from expiresIn
+    public var expirationDate: Date {
+        Date().addingTimeInterval(TimeInterval(expiresIn))
+    }
+
+    /// Check if the device authorization has expired
+    public var isExpired: Bool {
+        Date() > expirationDate
+    }
+
+    /// Time remaining before expiration
+    public var timeRemaining: TimeInterval {
+        max(0, expirationDate.timeIntervalSinceNow)
+    }
+
+    /// Polling interval with fallback to recommended 5 seconds
+    public var pollingInterval: TimeInterval {
+        TimeInterval(interval ?? 5)
+    }
 }
 
 /// Device flow specific errors (RFC 8628 Section 3.5)
-public enum DeviceFlowError: Error, CustomStringConvertible {
+public enum DeviceFlowError: Error, CustomStringConvertible, Equatable {
     /// The authorization request is still pending
     case authorizationPending
 
@@ -115,6 +135,21 @@ public enum DeviceFlowError: Error, CustomStringConvertible {
             return .accessDenied
         default:
             return .unknown(errorCode)
+        }
+    }
+
+    /// Equatable conformance for DeviceFlowError
+    public static func == (lhs: DeviceFlowError, rhs: DeviceFlowError) -> Bool {
+        switch (lhs, rhs) {
+        case (.authorizationPending, .authorizationPending),
+            (.slowDown, .slowDown),
+            (.expiredToken, .expiredToken),
+            (.accessDenied, .accessDenied):
+            return true
+        case (.unknown(let lhsError), .unknown(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
         }
     }
 }

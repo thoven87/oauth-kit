@@ -230,7 +230,9 @@ public struct OpenIDConnectClient: Sendable {
         return (tokenResponse, nil)
     }
 
-    /// Request device authorization for device flow (RFC 8628)
+    // MARK: - Device Flow (RFC 8628)
+
+    /// Request device authorization for device flow
     /// - Parameters:
     ///   - scopes: The requested scopes
     ///   - additionalParameters: Additional parameters to include in the device authorization request
@@ -261,13 +263,11 @@ public struct OpenIDConnectClient: Sendable {
             additionalParameters: additionalParameters
         )
 
-        // Validate ID token if present
         guard let idToken = tokenResponse.idToken else {
             throw OAuth2Error.invalidResponse("No ID token in device flow token response")
         }
-
         let claims = try await validateIDToken(idToken)
-        return (tokenResponse, claims)
+        return (tokenResponse: tokenResponse, claims: claims)
     }
 
     /// Poll for device authorization completion with automatic retry logic
@@ -463,8 +463,9 @@ public struct IDTokenClaims: JWTPayload, Equatable {
     /// Code hash
     public let cHash: String?
 
-    /// Additional custom claims
-    //public let additionalClaims: [String: AnyCodable]?
+    // Note: Additional custom claims require manual implementation in init(from:) and encode(to:)
+    // because this struct uses a custom Codable implementation. For automatic claim handling,
+    // use a struct with only JWT-Kit claim types and rely on Swift's synthesized Codable.
 
     /// Standard claims for name and email
     public let name: String?
@@ -552,20 +553,6 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         address = try container.decodeIfPresent(AddressClaim.self, forKey: .address)
         updatedAt = try container.decodeIfPresent(TimeInterval.self, forKey: .updatedAt)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
-
-        // Capture additional claims
-        let customContainer = try decoder.container(keyedBy: DynamicCodingKeys.self)
-        var extras = [String: AnyCodable]()
-
-        for key in customContainer.allKeys {
-            if CodingKeys(stringValue: key.stringValue) == nil {
-                if let value = try? customContainer.decode(AnyCodable.self, forKey: key) {
-                    extras[key.stringValue] = value
-                }
-            }
-        }
-
-        //self.additionalClaims = extras.isEmpty ? nil : extras
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -604,15 +591,6 @@ public struct IDTokenClaims: JWTPayload, Equatable {
         try container.encodeIfPresent(address, forKey: .address)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(userId, forKey: .userId)
-
-        // Encode additional claims
-        //        if let additionalClaims = additionalClaims {
-        //            var customContainer = encoder.container(keyedBy: DynamicCodingKeys.self)
-        //            for (key, value) in additionalClaims {
-        //                let dynamicKey = DynamicCodingKeys(stringValue: key)
-        //                try customContainer.encode(value, forKey: dynamicKey)
-        //            }
-        //        }
     }
 
     /// Address claim in OpenID Connect ID tokens

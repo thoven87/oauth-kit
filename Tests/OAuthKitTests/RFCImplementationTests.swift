@@ -14,6 +14,7 @@
 
 import AsyncHTTPClient
 import Foundation
+import JWTKit
 import Logging
 import NIOFoundationCompat
 import Testing
@@ -196,21 +197,22 @@ struct RFCImplementationTests {
                 """
 
             let data = json.data(using: .utf8)!
-            let response = try JSONDecoder().decode(TokenIntrospectionResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            let response = try decoder.decode(TokenIntrospectionResponse.self, from: data)
 
-            #expect(response.active == true)
-            #expect(response.scope == "read write")
-            #expect(response.clientID == "client123")
-            #expect(response.username == "user@example.com")
-            #expect(response.tokenType == "Bearer")
-            #expect(response.exp == 1_640_995_200)
-            #expect(response.iat == 1_640_991_600)
-            #expect(response.nbf == 1_640_991_600)
-            #expect(response.sub == "user123")
-            #expect(response.aud == ["https://api.example.com", "https://service.example.com"])
-            #expect(response.iss == "https://auth.example.com")
-            #expect(response.jti == "token123")
-            #expect(response.additionalClaims?["custom_claim"] != nil)
+            #expect(response.active.value == true)
+            #expect(response.scope?.value == "read write")
+            #expect(response.clientID?.value == "client123")
+            #expect(response.username?.value == "user@example.com")
+            #expect(response.tokenType?.value == "Bearer")
+            #expect(response.exp?.value == Date(timeIntervalSince1970: 1_640_995_200))
+            #expect(response.iat?.value == Date(timeIntervalSince1970: 1_640_991_600))
+            #expect(response.nbf?.value == Date(timeIntervalSince1970: 1_640_991_600))
+            #expect(response.sub?.value == "user123")
+            #expect(response.aud?.value == ["https://api.example.com", "https://service.example.com"])
+            #expect(response.iss?.value == "https://auth.example.com")
+            #expect(response.jti?.value == "token123")
         }
 
         @Test("TokenIntrospectionResponse inactive token")
@@ -222,9 +224,11 @@ struct RFCImplementationTests {
                 """
 
             let data = json.data(using: .utf8)!
-            let response = try JSONDecoder().decode(TokenIntrospectionResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            let response = try decoder.decode(TokenIntrospectionResponse.self, from: data)
 
-            #expect(response.active == false)
+            #expect(response.active.value == false)
             #expect(response.scope == nil)
             #expect(response.clientID == nil)
         }
@@ -239,40 +243,40 @@ struct RFCImplementationTests {
                 """
 
             let data = json.data(using: .utf8)!
-            let response = try JSONDecoder().decode(TokenIntrospectionResponse.self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            let response = try decoder.decode(TokenIntrospectionResponse.self, from: data)
 
-            #expect(response.active == true)
-            #expect(response.aud == ["https://api.example.com"])
+            #expect(response.active.value == true)
+            #expect(response.aud?.value == ["https://api.example.com"])
         }
 
         @Test("TokenIntrospectionResponse expiration checks")
         func testTokenIntrospectionResponseExpirationChecks() {
-            let currentTime = Date().timeIntervalSince1970
-
             let expiredResponse = TokenIntrospectionResponse(
                 active: true,
-                exp: Int(currentTime - 3600)  // Expired 1 hour ago
+                exp: Date(timeIntervalSinceNow: -3600)  // Expired 1 hour ago
             )
             #expect(expiredResponse.isExpired())
 
             let validResponse = TokenIntrospectionResponse(
                 active: true,
-                exp: Int(currentTime + 3600)  // Expires in 1 hour
+                exp: Date(timeIntervalSinceNow: 3600)  // Expires in 1 hour
             )
             #expect(!validResponse.isExpired())
 
             let notYetValidResponse = TokenIntrospectionResponse(
                 active: true,
-                nbf: Int(currentTime + 3600)  // Valid starting in 1 hour
+                nbf: Date(timeIntervalSinceNow: 3600)  // Valid starting in 1 hour
             )
             #expect(notYetValidResponse.isNotYetValid())
         }
 
         @Test("TokenIntrospectionResponse date properties")
         func testTokenIntrospectionResponseDateProperties() {
-            let exp = 1_640_995_200
-            let iat = 1_640_991_600
-            let nbf = 1_640_991_600
+            let exp = Date(timeIntervalSince1970: 1_640_995_200)
+            let iat = Date(timeIntervalSince1970: 1_640_991_600)
+            let nbf = Date(timeIntervalSince1970: 1_640_991_600)
 
             let response = TokenIntrospectionResponse(
                 active: true,
@@ -281,9 +285,9 @@ struct RFCImplementationTests {
                 nbf: nbf
             )
 
-            #expect(response.expirationDate == Date(timeIntervalSince1970: TimeInterval(exp)))
-            #expect(response.issuedAtDate == Date(timeIntervalSince1970: TimeInterval(iat)))
-            #expect(response.notBeforeDate == Date(timeIntervalSince1970: TimeInterval(nbf)))
+            #expect(response.expirationDate == exp)
+            #expect(response.issuedAtDate == iat)
+            #expect(response.notBeforeDate == nbf)
         }
     }
 
@@ -379,57 +383,72 @@ struct RFCImplementationTests {
     @Suite("Internal Implementation")
     struct InternalImplementationTests {
 
-        @Test("Token introspection handles additional claims internally")
-        func testTokenIntrospectionAdditionalClaims() throws {
-            // Test that additional claims are properly handled even though AnyCodable is internal
-            let json = """
-                {
-                    "active": true,
-                    "scope": "read write",
-                    "custom_field": "custom_value",
-                    "another_field": 123
-                }
-                """
+        @Test("Token introspection JWT claim validation")
+        func testTokenIntrospectionJWTClaimValidation() throws {
+            // Test JWT-Kit claim validation methods directly
+            let expiredResponse = TokenIntrospectionResponse(
+                active: true,
+                scope: "read write",
+                exp: Date().addingTimeInterval(-3600),  // Expired 1 hour ago
+                nbf: Date().addingTimeInterval(-1800)  // Valid since 30 minutes ago
+            )
 
-            let data = json.data(using: .utf8)!
-            let response = try JSONDecoder().decode(TokenIntrospectionResponse.self, from: data)
+            let futureResponse = TokenIntrospectionResponse(
+                active: true,
+                scope: "read write",
+                exp: Date().addingTimeInterval(3600),  // Valid for 1 hour
+                nbf: Date().addingTimeInterval(3600)  // Not valid until 1 hour from now
+            )
 
-            #expect(response.active == true)
-            #expect(response.scope == "read write")
-            // Additional claims are handled internally and not exposed in public API
-            #expect(response.additionalClaims != nil)
+            let validResponse = TokenIntrospectionResponse(
+                active: true,
+                scope: "read write",
+                exp: Date().addingTimeInterval(3600),  // Valid for 1 hour
+                nbf: Date().addingTimeInterval(-300)  // Valid since 5 minutes ago
+            )
+
+            // Test expiration validation - expired token should throw
+            do {
+                try expiredResponse.exp?.verifyNotExpired()
+                #expect(Bool(false), "Should have thrown validation error for expired token")
+            } catch {
+                // Expected to throw for expired token
+            }
+
+            // Test not-before validation - future token should throw
+            do {
+                try futureResponse.nbf?.verifyNotBefore()
+                #expect(Bool(false), "Should have thrown validation error for future token")
+            } catch {
+                // Expected to throw for future token
+            }
+
+            // Valid token should not throw
+            try validResponse.exp?.verifyNotExpired()
+            try validResponse.nbf?.verifyNotBefore()
         }
 
-        @Test("Additional claims are properly parsed")
-        func testAdditionalClaimsParsing() throws {
-            // Test that additional custom claims beyond RFC 7662 standard fields are captured
-            let json = """
-                {
-                    "active": true,
-                    "scope": "read write",
-                    "client_id": "client123",
-                    "username": "user@example.com",
-                    "custom_department": "engineering",
-                    "permission_level": "admin",
-                    "nested_data": {
-                        "team": "backend",
-                        "role": "lead"
-                    }
-                }
-                """
+        @Test("Token introspection claims type safety")
+        func testTokenIntrospectionClaimsTypeSafety() throws {
+            // Test that JWT-Kit claims provide type safety and direct access
+            let response = TokenIntrospectionResponse(
+                active: true,
+                scope: "read write",
+                clientID: "client123",
+                exp: Date().addingTimeInterval(3600),  // Valid for 1 hour
+                sub: "user123"
+            )
 
-            let data = json.data(using: .utf8)!
-            let response = try JSONDecoder().decode(TokenIntrospectionResponse.self, from: data)
+            // Test type-safe access to claim values
+            #expect(response.active.value == true)
+            #expect(response.scope?.value == "read write")
+            #expect(response.clientID?.value == "client123")
+            #expect(response.sub?.value == "user123")
+            #expect(response.exp?.value != nil)
 
-            // Standard fields should be parsed normally
-            #expect(response.active == true)
-            #expect(response.scope == "read write")
-            #expect(response.clientID == "client123")
-            #expect(response.username == "user@example.com")
-
-            // Additional claims should be captured
-            #expect(response.additionalClaims != nil)
-            #expect(response.additionalClaims?.count == 3)  // custom_department, permission_level, nested_data
+            // Test convenience methods still work
+            #expect(!response.isExpired())
+            #expect(response.expirationDate != nil)
         }
     }
 
