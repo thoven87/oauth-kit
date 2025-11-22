@@ -125,7 +125,7 @@ public struct OpenIDConnectClient: Sendable {
 
         // Verify and decode the ID token
         guard let idToken = tokenResponse.idToken else {
-            throw OAuth2Error.tokenValidationError("No ID token in response")
+            throw OAuth2Error.tokenError("No ID token in response")
         }
 
         let claims = try await validateIDToken(idToken)
@@ -230,6 +230,76 @@ public struct OpenIDConnectClient: Sendable {
         return (tokenResponse, nil)
     }
 
+    /// Request device authorization for device flow (RFC 8628)
+    /// - Parameters:
+    ///   - scopes: The requested scopes
+    ///   - additionalParameters: Additional parameters to include in the device authorization request
+    /// - Returns: Device authorization response containing device code, user code, and verification URI
+    /// - Throws: OAuth2Error if the device authorization request fails
+    public func requestDeviceAuthorization(
+        scopes: [String] = ["openid", "profile", "email"],
+        additionalParameters: [String: String] = [:]
+    ) async throws -> DeviceAuthorizationResponse {
+        try await oauth2Client.requestDeviceAuthorization(
+            scopes: scopes,
+            additionalParameters: additionalParameters
+        )
+    }
+
+    /// Exchange device code for tokens and validate ID token (device flow)
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response with validated ID token claims
+    /// - Throws: OAuth2Error or DeviceFlowError if the token exchange fails
+    public func exchangeDeviceCode(
+        _ deviceCode: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
+        let tokenResponse = try await oauth2Client.exchangeDeviceCode(
+            deviceCode,
+            additionalParameters: additionalParameters
+        )
+
+        // Validate ID token if present
+        guard let idToken = tokenResponse.idToken else {
+            throw OAuth2Error.invalidResponse("No ID token in device flow token response")
+        }
+
+        let claims = try await validateIDToken(idToken)
+        return (tokenResponse, claims)
+    }
+
+    /// Poll for device authorization completion with automatic retry logic
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - interval: Polling interval in seconds (default from device auth response)
+    ///   - timeout: Maximum time to wait in seconds (default 300)
+    ///   - additionalParameters: Additional parameters to include in token requests
+    /// - Returns: The token response with validated ID token claims when authorization is complete
+    /// - Throws: DeviceFlowError or OAuth2Error if polling fails or times out
+    public func pollForDeviceAuthorization(
+        deviceCode: String,
+        interval: Int = 5,
+        timeout: TimeInterval = 300,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
+        let tokenResponse = try await oauth2Client.pollForDeviceAuthorization(
+            deviceCode: deviceCode,
+            interval: interval,
+            timeout: timeout,
+            additionalParameters: additionalParameters
+        )
+
+        // Validate ID token if present
+        guard let idToken = tokenResponse.idToken else {
+            throw OAuth2Error.invalidResponse("No ID token in device flow token response")
+        }
+
+        let claims = try await validateIDToken(idToken)
+        return (tokenResponse, claims)
+    }
+
     /// Validate an ID token and extract its claims
     /// - Parameter idToken: The ID token to validate
     /// - Returns: The validated ID token claims
@@ -245,34 +315,34 @@ public struct OpenIDConnectClient: Sendable {
 
             // Validate issuer
             guard jwt.iss?.value == configuration.issuer else {
-                throw OAuth2Error.tokenValidationError("Invalid issuer: \(jwt.iss ?? "nil") != \(configuration.issuer)")
+                throw OAuth2Error.tokenError("Invalid issuer: \(jwt.iss ?? "nil") != \(configuration.issuer)")
             }
 
             // Validate audience
             guard jwt.aud?.contains(clientID) == true else {
-                throw OAuth2Error.tokenValidationError("Invalid audience: \(jwt.aud?.description ?? "nil") does not contain \(clientID)")
+                throw OAuth2Error.tokenError("Invalid audience: \(jwt.aud?.description ?? "nil") does not contain \(clientID)")
             }
 
             // Validate expiration time
             let currentTime = Date()
             guard let expirationTime = jwt.exp?.value, expirationTime > currentTime else {
-                throw OAuth2Error.tokenValidationError("Token has expired")
+                throw OAuth2Error.tokenError("Token has expired")
             }
 
             // Validate issued at time
             if let issuedAt = jwt.iat?.value, issuedAt > currentTime {
-                throw OAuth2Error.tokenValidationError("Token issued in the future")
+                throw OAuth2Error.tokenError("Token issued in the future")
             }
 
             return jwt
         } catch let error as JWTError {
             logger.error("ID token validation failed: \(error)")
-            throw OAuth2Error.tokenValidationError("ID token validation failed: \(error)")
+            throw OAuth2Error.tokenError("ID token validation failed: \(error)")
         } catch let error as OAuth2Error {
             throw error
         } catch {
             logger.error("ID token validation failed with error: \(error)")
-            throw OAuth2Error.tokenValidationError("ID token validation failed: \(error)")
+            throw OAuth2Error.tokenError("ID token validation failed: \(error)")
         }
     }
 
@@ -582,96 +652,5 @@ internal struct DynamicCodingKeys: CodingKey {
     init?(intValue: Int) {
         self.stringValue = "\(intValue)"
         self.intValue = intValue
-    }
-}
-
-/// A type-erasing Codable wrapper for handling arbitrary JSON types
-public struct AnyCodable: Codable, Equatable {
-    private let value: Any
-    private let encode: (Encoder) throws -> Void
-
-    public init<T: Codable>(_ value: T) {
-        self.value = value
-        self.encode = { encoder in
-            try value.encode(to: encoder)
-        }
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            self.value = NSNull()
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encodeNil()
-            }
-        } else if let bool = try? container.decode(Bool.self) {
-            self.value = bool
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(bool)
-            }
-        } else if let int = try? container.decode(Int.self) {
-            self.value = int
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(int)
-            }
-        } else if let double = try? container.decode(Double.self) {
-            self.value = double
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(double)
-            }
-        } else if let string = try? container.decode(String.self) {
-            self.value = string
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(string)
-            }
-        } else if let array = try? container.decode([AnyCodable].self) {
-            self.value = array.map { $0.value }
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(array)
-            }
-        } else if let dictionary = try? container.decode([String: AnyCodable].self) {
-            self.value = dictionary.mapValues { $0.value }
-            self.encode = { encoder in
-                var container = encoder.singleValueContainer()
-                try container.encode(dictionary)
-            }
-        } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode AnyCodable")
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try encode(encoder)
-    }
-
-    public static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
-        isEqual(lhs.value, rhs.value)
-    }
-
-    private static func isEqual(_ lhs: Any, _ rhs: Any) -> Bool {
-        if let lhs = lhs as? NSNumber, let rhs = rhs as? NSNumber {
-            return lhs.isEqual(rhs)
-        } else if let lhs = lhs as? String, let rhs = rhs as? String {
-            return lhs == rhs
-        } else if let lhs = lhs as? Bool, let rhs = rhs as? Bool {
-            return lhs == rhs
-        } else if let lhs = lhs as? [Any], let rhs = rhs as? [Any] {
-            return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy(isEqual)
-        } else if let lhs = lhs as? [String: Any], let rhs = rhs as? [String: Any] {
-            return lhs.count == rhs.count
-                && lhs.keys.allSatisfy { key in
-                    rhs[key].map { isEqual(lhs[key]!, $0) } ?? false
-                }
-        } else if lhs is NSNull && rhs is NSNull {
-            return true
-        }
-        return false
     }
 }

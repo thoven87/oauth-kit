@@ -265,7 +265,7 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
 
         // Check for Slack API errors
         if let ok = jsonObject["ok"] as? Bool, !ok, let error = jsonObject["error"] as? String {
-            throw OAuth2Error.tokenExchangeError("Slack API error: \(error)")
+            throw OAuth2Error.tokenError("Slack API error: \(error)")
         }
 
         // Extract standard OAuth fields for TokenResponse

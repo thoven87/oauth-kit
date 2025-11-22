@@ -157,12 +157,12 @@ public struct AppleOAuthProvider {
 
         // Validate the issuer
         guard claims.iss == "https://appleid.apple.com" else {
-            throw OAuth2Error.tokenValidationError("Invalid issuer: \(claims.iss)")
+            throw OAuth2Error.tokenError("Invalid issuer: \(claims.iss)")
         }
 
         // If a nonce was provided, validate it
         if let nonce = nonce, claims.nonce != nonce {
-            throw OAuth2Error.tokenValidationError("Nonce mismatch")
+            throw OAuth2Error.tokenError("Nonce mismatch")
         }
 
         return claims
@@ -285,7 +285,7 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
         try claims.audience.verifyIntendedAudience(includes: clientID)
         // If a nonce was provided, validate it
         if let nonce = nonce, claims.nonce != nonce {
-            throw OAuth2Error.tokenValidationError("Nonce mismatch")
+            throw OAuth2Error.tokenError("Nonce mismatch")
         }
         return claims
     }
@@ -308,13 +308,13 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
 
         func verify(using algorithm: some JWTAlgorithm) async throws {
             if iat.value > exp.value {
-                throw OAuth2Error.tokenValidationError("Token expired")
+                throw OAuth2Error.tokenError("Token expired")
             }
             if iat.value > Date.now {
-                throw OAuth2Error.tokenValidationError("Token issued in future")
+                throw OAuth2Error.tokenError("Token issued in future")
             }
             if iss.value != AppleOAuthProvider.Endpoints.issuer {
-                throw OAuth2Error.tokenValidationError("Unexpected issuer")
+                throw OAuth2Error.tokenError("Unexpected issuer")
             }
             try exp.verifyNotExpired()
         }

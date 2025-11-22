@@ -110,6 +110,23 @@ public struct FacebookOAuthProvider: Sendable {
         )
     }
 
+    /// Refresh an access token using a refresh token
+    /// - Parameters:
+    ///   - refreshToken: The refresh token
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response
+    /// - Throws: OAuth2Error if the token refresh fails
+    public func refreshAccessToken(
+        refreshToken: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims?) {
+        let tokenResponse = try await client.refreshToken(
+            refreshToken,
+            additionalParameters: additionalParameters
+        )
+        return (tokenResponse, nil)  // OAuth2 providers don't return ID token claims
+    }
+
     /// Retrieve the user's profile information from Facebook
     /// - Parameters:
     ///   - accessToken: The access token from the token response
