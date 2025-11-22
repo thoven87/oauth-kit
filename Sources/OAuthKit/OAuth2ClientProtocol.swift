@@ -238,6 +238,129 @@ extension OAuth2ClientProtocol {
         return try await requestToken(parameters: parameters)
     }
 
+    /// Request device authorization for device flow (RFC 8628)
+    /// - Parameters:
+    ///   - scopes: The requested scopes
+    ///   - additionalParameters: Additional parameters to include in the device authorization request
+    /// - Returns: Device authorization response containing device code, user code, and verification URI
+    /// - Throws: OAuth2Error if the device authorization request fails
+    public func requestDeviceAuthorization(
+        scopes: [String],
+        additionalParameters: [String: String] = [:]
+    ) async throws -> DeviceAuthorizationResponse {
+        guard let authorizationEndpoint = authorizationEndpoint else {
+            throw OAuth2Error.configurationError("Authorization endpoint is required for device flow but not configured")
+        }
+
+        // Construct device authorization endpoint
+        let deviceAuthEndpoint: String
+        if authorizationEndpoint.hasSuffix("/") {
+            deviceAuthEndpoint = authorizationEndpoint + "device_authorization"
+        } else {
+            deviceAuthEndpoint = authorizationEndpoint + "/device_authorization"
+        }
+
+        guard let url = URL(string: deviceAuthEndpoint) else {
+            throw OAuth2Error.configurationError("Invalid device authorization endpoint URL: \(deviceAuthEndpoint)")
+        }
+
+        var parameters = [
+            "client_id": clientID
+        ]
+
+        if !scopes.isEmpty {
+            parameters["scope"] = scopesToString(scopes)
+        }
+
+        // Add any additional parameters
+        for (key, value) in additionalParameters {
+            parameters[key] = value
+        }
+
+        return try await requestDeviceAuthorization(url: url, parameters: parameters)
+    }
+
+    /// Exchange device code for tokens (device flow polling)
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response
+    /// - Throws: OAuth2Error or DeviceFlowError if the token exchange fails
+    public func exchangeDeviceCode(
+        _ deviceCode: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> TokenResponse {
+        var parameters = [
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "device_code": deviceCode,
+            "client_id": clientID,
+        ]
+
+        // Add client secret if available (for confidential clients)
+        if !clientSecret.isEmpty {
+            parameters["client_secret"] = clientSecret
+        }
+
+        // Add any additional parameters
+        for (key, value) in additionalParameters {
+            parameters[key] = value
+        }
+
+        do {
+            return try await requestToken(parameters: parameters)
+        } catch OAuth2Error.tokenError(let message) {
+            // Check if this is a device flow specific error
+            if message.contains("authorization_pending") {
+                throw DeviceFlowError.authorizationPending
+            } else if message.contains("slow_down") {
+                throw DeviceFlowError.slowDown
+            } else if message.contains("expired_token") {
+                throw DeviceFlowError.expiredToken
+            } else if message.contains("access_denied") {
+                throw DeviceFlowError.accessDenied
+            } else {
+                throw OAuth2Error.tokenError(message)
+            }
+        }
+    }
+
+    /// Poll for device authorization completion with automatic retry logic
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - interval: Polling interval in seconds (default from device auth response)
+    ///   - timeout: Maximum time to wait in seconds (default 300)
+    ///   - additionalParameters: Additional parameters to include in token requests
+    /// - Returns: The token response when authorization is complete
+    /// - Throws: DeviceFlowError or OAuth2Error if polling fails or times out
+    public func pollForDeviceAuthorization(
+        deviceCode: String,
+        interval: Int = 5,
+        timeout: TimeInterval = 300,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> TokenResponse {
+        let startTime = Date()
+        var currentInterval = interval
+
+        while Date().timeIntervalSince(startTime) < timeout {
+            do {
+                return try await exchangeDeviceCode(deviceCode, additionalParameters: additionalParameters)
+            } catch DeviceFlowError.authorizationPending {
+                // Continue polling
+                try await Task.sleep(nanoseconds: UInt64(currentInterval * 1_000_000_000))
+            } catch DeviceFlowError.slowDown {
+                // Increase polling interval and continue
+                currentInterval = max(currentInterval + 5, 10)
+                logger.debug("Slowing down device flow polling to \(currentInterval) seconds")
+                try await Task.sleep(nanoseconds: UInt64(currentInterval * 1_000_000_000))
+            } catch {
+                // Other errors should be propagated immediately
+                throw error
+            }
+        }
+
+        throw DeviceFlowError.expiredToken
+    }
+
     /// Makes a request to the token endpoint
     /// - Parameter parameters: The parameters to include in the token request
     /// - Returns: The token response
@@ -275,7 +398,7 @@ extension OAuth2ClientProtocol {
                 let responseString = String(buffer: responseBody)
 
                 logger.error("Token request failed with status: \(response.status), body: \(responseString)")
-                throw OAuth2Error.tokenExchangeError("Token request failed with status: \(response.status)")
+                throw OAuth2Error.tokenError("Token request failed with status: \(response.status)")
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
@@ -373,6 +496,354 @@ extension OAuth2ClientProtocol {
         }
     }
 
+    /// Internal method for making device authorization requests
+    /// - Parameters:
+    ///   - url: The device authorization endpoint URL
+    ///   - parameters: The parameters to include in the request
+    /// - Returns: Device authorization response
+    /// - Throws: OAuth2Error if the request fails
+    internal func requestDeviceAuthorization(url: URL, parameters: [String: String]) async throws -> DeviceAuthorizationResponse {
+        // Convert parameters to form-urlencoded body
+        let formBody =
+            parameters
+            .map { key, value in
+                "\(key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key)=\(value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value)"
+            }
+            .joined(separator: "&")
+
+        guard let bodyData = formBody.data(using: .utf8) else {
+            throw OAuth2Error.configurationError("Failed to encode device authorization parameters")
+        }
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = .POST
+        request.headers.add(name: "Content-Type", value: "application/x-www-form-urlencoded")
+        request.headers.add(name: "Accept", value: "application/json")
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
+        request.body = .bytes(bodyData)
+
+        do {
+            let response = try await httpClient.execute(request, timeout: .seconds(60))
+
+            guard response.status == .ok else {
+                // Try to get error details from the response body
+                let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+                let responseString = String(buffer: responseBody)
+
+                logger.error("Device authorization request failed with status: \(response.status), body: \(responseString)")
+                throw OAuth2Error.configurationError("Device authorization request failed with status: \(response.status)")
+            }
+
+            let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+            let decoder = JSONDecoder()
+            return try decoder.decode(DeviceAuthorizationResponse.self, from: responseBody)
+        } catch let error as OAuth2Error {
+            throw error
+        } catch {
+            logger.error("Device authorization request failed with error: \(error)")
+            throw OAuth2Error.networkError("Device authorization request failed: \(error)")
+        }
+    }
+
+    /// Perform OAuth 2.0 Token Exchange (RFC 8693)
+    /// - Parameter request: The token exchange request containing all parameters
+    /// - Returns: The token exchange response
+    /// - Throws: OAuth2Error if the exchange fails
+    public func exchangeToken(_ request: TokenExchangeRequest) async throws -> TokenResponse {
+        logger.debug("Performing token exchange")
+
+        var parameters = request.toParameters()
+
+        // Add client authentication
+        parameters["client_id"] = clientID
+        parameters["client_secret"] = clientSecret
+
+        do {
+            let response = try await requestTokenExchange(parameters: parameters)
+            logger.debug("Token exchange successful")
+            return response
+        } catch let error as OAuth2Error {
+            logger.error("Token exchange failed: \(error.errorDescription ?? "Unknown error")")
+            throw error
+        } catch {
+            logger.error("Token exchange failed with error: \(error)")
+            throw OAuth2Error.tokenError("Token exchange failed: \(error)")
+        }
+    }
+
+    /// Convenience method for token exchange with individual parameters
+    /// - Parameters:
+    ///   - subjectToken: The token being exchanged
+    ///   - subjectTokenType: The type of the subject token
+    ///   - requestedTokenType: The type of token being requested (optional)
+    ///   - resource: The target resource for the token (optional)
+    ///   - audience: The logical name of the target service (optional)
+    ///   - scope: The requested scope (optional)
+    ///   - actorToken: Token representing the acting party (optional)
+    ///   - actorTokenType: The type of the actor token (optional)
+    /// - Returns: The token exchange response
+    /// - Throws: OAuth2Error if the exchange fails
+    public func exchangeToken(
+        subjectToken: String,
+        subjectTokenType: TokenType,
+        requestedTokenType: TokenType? = nil,
+        resource: [String]? = nil,
+        audience: [String]? = nil,
+        scope: [String]? = nil,
+        actorToken: String? = nil,
+        actorTokenType: TokenType? = nil
+    ) async throws -> TokenResponse {
+        let request = TokenExchangeRequest(
+            subjectToken: subjectToken,
+            subjectTokenType: subjectTokenType,
+            requestedTokenType: requestedTokenType,
+            resource: resource,
+            audience: audience,
+            scope: scope,
+            actorToken: actorToken,
+            actorTokenType: actorTokenType
+        )
+
+        return try await exchangeToken(request)
+    }
+
+    /// Internal method to make the token exchange HTTP request
+    /// - Parameter parameters: Form parameters for the token exchange request
+    /// - Returns: The token exchange response
+    /// - Throws: OAuth2Error if the request fails
+    internal func requestTokenExchange(parameters: [String: String]) async throws -> TokenResponse {
+        guard let url = URL(string: tokenEndpoint) else {
+            throw OAuth2Error.configurationError("Invalid token endpoint URL: \(tokenEndpoint)")
+        }
+
+        let body = parameters.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+            .joined(separator: "&")
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = .POST
+        request.headers.add(name: "Content-Type", value: "application/x-www-form-urlencoded")
+        request.headers.add(name: "Accept", value: "application/json")
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
+
+        guard let bodyData = body.data(using: .utf8) else {
+            throw OAuth2Error.configurationError("Failed to encode request parameters")
+        }
+        request.body = .bytes(bodyData)
+
+        logger.debug("Making token exchange request to: \(tokenEndpoint)")
+
+        do {
+            let response = try await httpClient.execute(request, timeout: .seconds(30))
+
+            guard response.status == .ok else {
+                let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+                let responseString = String(buffer: responseBody)
+
+                logger.error("Token exchange failed with status: \(response.status), body: \(responseString)")
+                throw OAuth2Error.tokenError("Token exchange failed with status: \(response.status)")
+            }
+
+            let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+            return try JSONDecoder().decode(TokenResponse.self, from: responseBody)
+
+        } catch let error as OAuth2Error {
+            throw error
+        } catch {
+            logger.error("Token exchange request failed with error: \(error)")
+            throw OAuth2Error.networkError("Token exchange request failed: \(error)")
+        }
+    }
+
+    /// Perform OAuth 2.0 Token Introspection (RFC 7662)
+    /// - Parameter request: The token introspection request containing the token and optional hint
+    /// - Returns: The token introspection response
+    /// - Throws: OAuth2Error if the introspection fails
+    public func introspectToken(_ request: TokenIntrospectionRequest) async throws -> TokenIntrospectionResponse {
+        logger.debug("Performing token introspection")
+
+        var parameters = request.toParameters()
+
+        // Add client authentication
+        parameters["client_id"] = clientID
+        parameters["client_secret"] = clientSecret
+
+        do {
+            let response = try await requestTokenIntrospection(parameters: parameters)
+            logger.debug("Token introspection successful")
+            return response
+        } catch let error as OAuth2Error {
+            logger.error("Token introspection failed: \(error.errorDescription ?? "Unknown error")")
+            throw error
+        } catch {
+            logger.error("Token introspection failed with error: \(error)")
+            throw OAuth2Error.tokenError("Token introspection failed: \(error)")
+        }
+    }
+
+    /// Convenience method for token introspection with individual parameters
+    /// - Parameters:
+    ///   - token: The token to introspect
+    ///   - tokenTypeHint: A hint about the type of token being introspected (optional)
+    /// - Returns: The token introspection response
+    /// - Throws: OAuth2Error if the introspection fails
+    public func introspectToken(
+        token: String,
+        tokenTypeHint: String? = nil
+    ) async throws -> TokenIntrospectionResponse {
+        let request = TokenIntrospectionRequest(token: token, tokenTypeHint: tokenTypeHint)
+        return try await introspectToken(request)
+    }
+
+    /// Internal method to make the token introspection HTTP request
+    /// - Parameter parameters: Form parameters for the token introspection request
+    /// - Returns: The token introspection response
+    /// - Throws: OAuth2Error if the request fails
+    internal func requestTokenIntrospection(parameters: [String: String]) async throws -> TokenIntrospectionResponse {
+        // Use conventional introspection endpoint pattern
+        let baseURL = tokenEndpoint.replacingOccurrences(of: "/token", with: "")
+        let introspectionEndpoint = "\(baseURL)/introspect"
+
+        guard let url = URL(string: introspectionEndpoint) else {
+            throw OAuth2Error.configurationError("Invalid introspection endpoint URL: \(introspectionEndpoint)")
+        }
+
+        let body = parameters.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+            .joined(separator: "&")
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = .POST
+        request.headers.add(name: "Content-Type", value: "application/x-www-form-urlencoded")
+        request.headers.add(name: "Accept", value: "application/json")
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
+
+        guard let bodyData = body.data(using: .utf8) else {
+            throw OAuth2Error.configurationError("Failed to encode request parameters")
+        }
+        request.body = .bytes(bodyData)
+
+        logger.debug("Making token introspection request to: \(introspectionEndpoint)")
+
+        do {
+            let response = try await httpClient.execute(request, timeout: .seconds(30))
+
+            guard response.status == .ok else {
+                let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+                let responseString = String(buffer: responseBody)
+
+                logger.error("Token introspection failed with status: \(response.status), body: \(responseString)")
+                throw OAuth2Error.tokenError("Token introspection failed with status: \(response.status)")
+            }
+
+            let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+            return try JSONDecoder().decode(TokenIntrospectionResponse.self, from: responseBody)
+
+        } catch let error as OAuth2Error {
+            throw error
+        } catch {
+            logger.error("Token introspection request failed with error: \(error)")
+            throw OAuth2Error.networkError("Token introspection request failed: \(error)")
+        }
+    }
+
+    /// Perform OAuth 2.0 Token Revocation (RFC 7009)
+    /// - Parameter request: The token revocation request containing the token and optional hint
+    /// - Returns: The token revocation response
+    /// - Throws: OAuth2Error if the revocation fails
+    public func revokeToken(_ request: TokenRevocationRequest) async throws -> TokenRevocationResponse {
+        logger.debug("Performing token revocation")
+
+        var parameters = request.toParameters()
+
+        // Add client authentication
+        parameters["client_id"] = clientID
+        parameters["client_secret"] = clientSecret
+
+        do {
+            let response = try await requestTokenRevocation(parameters: parameters)
+            logger.debug("Token revocation successful")
+            return response
+        } catch let error as OAuth2Error {
+            logger.error("Token revocation failed: \(error.errorDescription ?? "Unknown error")")
+            throw error
+        } catch {
+            logger.error("Token revocation failed with error: \(error)")
+            throw OAuth2Error.tokenError("Token revocation failed: \(error)")
+        }
+    }
+
+    /// Convenience method for token revocation with individual parameters
+    /// - Parameters:
+    ///   - token: The token to revoke
+    ///   - tokenTypeHint: A hint about the type of token being revoked (optional)
+    /// - Returns: The token revocation response
+    /// - Throws: OAuth2Error if the revocation fails
+    public func revokeToken(
+        token: String,
+        tokenTypeHint: String? = nil
+    ) async throws -> TokenRevocationResponse {
+        let request = TokenRevocationRequest(token: token, tokenTypeHint: tokenTypeHint)
+        return try await revokeToken(request)
+    }
+
+    /// Internal method to make the token revocation HTTP request
+    /// - Parameter parameters: Form parameters for the token revocation request
+    /// - Returns: The token revocation response
+    /// - Throws: OAuth2Error if the request fails
+    internal func requestTokenRevocation(parameters: [String: String]) async throws -> TokenRevocationResponse {
+        // Use conventional revocation endpoint pattern
+        let baseURL = tokenEndpoint.replacingOccurrences(of: "/token", with: "")
+        let revocationEndpoint = "\(baseURL)/revoke"
+
+        guard let url = URL(string: revocationEndpoint) else {
+            throw OAuth2Error.configurationError("Invalid revocation endpoint URL: \(revocationEndpoint)")
+        }
+
+        let body = parameters.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+            .joined(separator: "&")
+
+        var request = HTTPClientRequest(url: url.absoluteString)
+        request.method = .POST
+        request.headers.add(name: "Content-Type", value: "application/x-www-form-urlencoded")
+        request.headers.add(name: "Accept", value: "application/json")
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
+
+        guard let bodyData = body.data(using: .utf8) else {
+            throw OAuth2Error.configurationError("Failed to encode request parameters")
+        }
+        request.body = .bytes(bodyData)
+
+        logger.debug("Making token revocation request to: \(revocationEndpoint)")
+
+        do {
+            let response = try await httpClient.execute(request, timeout: .seconds(30))
+
+            if response.status == .ok {
+                // RFC 7009 allows empty response for successful revocation
+                return TokenRevocationResponse.success()
+            } else {
+                let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+                let responseString = String(buffer: responseBody)
+
+                logger.error("Token revocation failed with status: \(response.status), body: \(responseString)")
+
+                // Try to parse error response
+                if let data = responseString.data(using: .utf8),
+                    let errorResponse = try? JSONDecoder().decode(TokenRevocationResponse.self, from: data)
+                {
+                    return errorResponse
+                }
+
+                throw OAuth2Error.tokenError("Token revocation failed with status: \(response.status)")
+            }
+
+        } catch let error as OAuth2Error {
+            throw error
+        } catch {
+            logger.error("Token revocation request failed with error: \(error)")
+            throw OAuth2Error.networkError("Token revocation request failed: \(error)")
+        }
+    }
+
     internal func scopesToString(_ scopes: [String]) -> String {
         scopes.joined(separator: " ")
     }
@@ -384,8 +855,8 @@ extension Data {
     /// - Returns: The base64URL encoded string
     fileprivate func base64URLEncodedString() -> String {
         base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
+            .replacing("+", with: "-")
+            .replacing("/", with: "_")
+            .replacing("=", with: "")
     }
 }

@@ -1,0 +1,76 @@
+version: 1
+
+builder:
+  configs:
+    - platform: macos-spm
+      swift_version: "6.0"
+      build_arguments:
+        - "--target"
+        - "OAuthKit"
+      documentation_targets:
+        - "OAuthKit"
+    - platform: linux-spm
+      swift_version: "6.0"
+      build_arguments:
+        - "--target"
+        - "OAuthKit"
+      documentation_targets:
+        - "OAuthKit"
+
+documentation:
+  enable_docc: true
+  docc_archive: true
+  base_url: "https://swiftpackageindex.com/thoven87/oauth-kit/documentation"
+
+metadata:
+  description: "A comprehensive Swift OAuth2 and OpenID Connect client library with modern async/await support, device flow, and MFA challenge flows"
+  keywords:
+    - "oauth"
+    - "oauth2"
+    - "openid"
+    - "oidc"
+    - "authentication"
+    - "authorization"
+    - "jwt"
+    - "pkce"
+    - "device-flow"
+    - "mfa"
+    - "multi-factor"
+    - "google"
+    - "microsoft"
+    - "apple"
+    - "github"
+    - "discord"
+    - "auth0"
+    - "okta"
+    - "aws-cognito"
+    - "linkedin"
+    - "facebook"
+    - "slack"
+    - "gitlab"
+    - "dropbox"
+    - "async"
+    - "swift"
+    - "server"
+    - "vapor"
+    - "hummingbird"
+    - "enterprise"
+    - "push-notifications"
+  authors:
+    - "OAuth Kit Team"
+  license: "Apache-2.0"
+  repository_url: "https://github.com/thoven87/oauth-kit"
+
+requirements:
+  minimum_swift_version: "6.0"
+  platforms:
+    - name: "macOS"
+      version: "13.0"
+    - name: "linux"
+      version: "ubuntu-20.04"
+    - name: "iOS"
+      version: "16.0"
+    - name: "tvOS"
+      version: "16.0"
+    - name: "watchOS"
+      version: "9.0"

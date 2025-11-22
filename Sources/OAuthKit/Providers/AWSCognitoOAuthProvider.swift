@@ -171,6 +171,22 @@ public struct AWSCognitoOAuthProvider {
         )
     }
 
+    /// Refresh an access token using a refresh token
+    /// - Parameters:
+    ///   - refreshToken: The refresh token
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response and ID token claims
+    /// - Throws: OAuth2Error if the token refresh fails
+    public func refreshAccessToken(
+        refreshToken: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims?) {
+        try await client.refreshToken(
+            refreshToken,
+            additionalParameters: additionalParameters
+        )
+    }
+
     /// Get user information from AWS Cognito
     /// - Parameters:
     ///   - accessToken: The access token from the token response

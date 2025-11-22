@@ -166,6 +166,60 @@ public struct GoogleOAuthProvider: Sendable {
         return userInfo
     }
 
+    /// Request device authorization for device flow (RFC 8628)
+    /// - Parameters:
+    ///   - scopes: The requested scopes
+    ///   - additionalParameters: Additional parameters to include in the device authorization request
+    /// - Returns: Device authorization response containing device code, user code, and verification URI
+    /// - Throws: OAuth2Error if the device authorization request fails
+    public func requestDeviceAuthorization(
+        scopes: [String] = ["openid", "profile", "email"],
+        additionalParameters: [String: String] = [:]
+    ) async throws -> DeviceAuthorizationResponse {
+        try await client.requestDeviceAuthorization(
+            scopes: scopes,
+            additionalParameters: additionalParameters
+        )
+    }
+
+    /// Exchange device code for tokens and validate ID token (device flow)
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response with validated ID token claims
+    /// - Throws: OAuth2Error or DeviceFlowError if the token exchange fails
+    public func exchangeDeviceCode(
+        _ deviceCode: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
+        try await client.exchangeDeviceCode(
+            deviceCode,
+            additionalParameters: additionalParameters
+        )
+    }
+
+    /// Poll for device authorization completion with automatic retry logic
+    /// - Parameters:
+    ///   - deviceCode: The device code from device authorization response
+    ///   - interval: Polling interval in seconds (default from device auth response)
+    ///   - timeout: Maximum time to wait in seconds (default 300)
+    ///   - additionalParameters: Additional parameters to include in token requests
+    /// - Returns: The token response with validated ID token claims when authorization is complete
+    /// - Throws: DeviceFlowError or OAuth2Error if polling fails or times out
+    public func pollForDeviceAuthorization(
+        deviceCode: String,
+        interval: Int = 5,
+        timeout: TimeInterval = 300,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
+        try await client.pollForDeviceAuthorization(
+            deviceCode: deviceCode,
+            interval: interval,
+            timeout: timeout,
+            additionalParameters: additionalParameters
+        )
+    }
+
     /// Authenticate using Google service account credentials
     /// - Parameters:
     ///   - credentials: The Google service account credentials
@@ -423,7 +477,7 @@ public struct GoogleOAuthProvider: Sendable {
             guard response.status == .ok else {
                 let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
                 let responseString = String(buffer: responseBody)
-                throw OAuth2Error.tokenExchangeError("Service account token request failed with status: \(response.status), body: \(responseString)")
+                throw OAuth2Error.tokenError("Service account token request failed with status: \(response.status), body: \(responseString)")
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit

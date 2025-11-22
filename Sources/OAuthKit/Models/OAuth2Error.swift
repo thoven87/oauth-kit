@@ -19,14 +19,8 @@ public enum OAuth2Error: Error, LocalizedError {
     /// Error during the authorization code flow
     case authorizationError(String)
 
-    /// Error when exchanging a code for tokens
-    case tokenExchangeError(String)
-
-    /// Error when refreshing a token
-    case tokenRefreshError(String)
-
-    /// Error when validating a token
-    case tokenValidationError(String)
+    /// Error during token operations (exchange, refresh, validation)
+    case tokenError(String)
 
     /// Error with client credentials
     case clientCredentialsError(String)
@@ -52,7 +46,7 @@ public enum OAuth2Error: Error, LocalizedError {
     /// Error in response
     case invalidResponse(String)
 
-    /// Error from the OpenID server
+    /// Error from the OAuth server
     case serverError(String)
 
     /// Human-readable error description
@@ -60,12 +54,8 @@ public enum OAuth2Error: Error, LocalizedError {
         switch self {
         case .authorizationError(let message):
             return "Authorization error: \(message)"
-        case .tokenExchangeError(let message):
-            return "Token exchange error: \(message)"
-        case .tokenRefreshError(let message):
-            return "Token refresh error: \(message)"
-        case .tokenValidationError(let message):
-            return "Token validation error: \(message)"
+        case .tokenError(let message):
+            return "Token error: \(message)"
         case .clientCredentialsError(let message):
             return "Client credentials error: \(message)"
         case .networkError(let message):
@@ -84,6 +74,7 @@ public enum OAuth2Error: Error, LocalizedError {
             return "Invalid response: \(message)"
         case .serverError(let message):
             return "Server error: \(message)"
+
         }
     }
 }

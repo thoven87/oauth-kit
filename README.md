@@ -4,23 +4,47 @@ A Swift OAuth2 and OpenID Connect client library with modern async/await support
 
 ## Features
 
+### Core OAuth2 & OpenID Connect
 - OAuth 2.0 authorization code flow with PKCE support
 - OAuth 2.0 client credentials flow
+- OAuth 2.0 device authorization grant (RFC 8628)
+- **OAuth 2.0 Token Exchange (RFC 8693)**
+- **OAuth 2.0 Token Introspection (RFC 7662)**
+- **OAuth 2.0 Token Revocation (RFC 7009)**
 - OpenID Connect support with JWT validation
+- Auto-discovery of OpenID Connect provider configuration
+- Token refresh support
+- Fully asynchronous API using Swift's modern async/await pattern
+
+### Provider Integrations
 - Google Sign-In integration
 - Google Service Account authentication
 - Microsoft 365 / Azure AD Sign-In integration
+- Auth0 Sign-In integration
+- Discord Sign-In integration
+- LinkedIn Sign-In integration
+- GitLab Sign-In integration
+- Dropbox Sign-In integration
 - Sign-in with Apple
 - Sign-in with Slack
 - Sign-in with Facebook
 - Sign-in with GitHub
 - Sign-in with Okta
 - Sign-in with AWS Cognito
-- Sign-in with KeyCloak 
-- Auto-discovery of OpenID Connect provider configuration
-- Token refresh support
-- Fully asynchronous API using Swift's modern async/await pattern
+- Sign-in with KeyCloak
+
+### Platform Support
 - Cross-platform support (macOS and Linux)
+- Swift 6.0+ with strict concurrency support
+
+## What's New in v1.1
+
+🚀 **New RFC Implementations:**
+- **Token Exchange (RFC 8693)**: Secure token delegation for microservices
+- **Token Introspection (RFC 7662)**: Validate and inspect token metadata
+- **Token Revocation (RFC 7009)**: Properly invalidate tokens
+
+See [RFC_IMPLEMENTATIONS.md](RFC_IMPLEMENTATIONS.md) for detailed usage examples.
 
 ## Requirements
 
@@ -372,6 +396,300 @@ let graphData = try await microsoftProvider.callGraphAPI(
 print("Graph API data: \(graphData)")
 ```
 
+### Auth0 Sign-In
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthClientFactory()
+
+// Create Auth0 OAuth provider
+let auth0Provider = try await oauthKit.auth0Provider(
+    domain: "dev-123456.us.auth0.com",  // Your Auth0 domain
+    clientID: "your-auth0-client-id",  // From Auth0 dashboard
+    clientSecret: "your-auth0-client-secret", // From Auth0 dashboard
+    redirectURI: "https://your-app.example.com/auth0-callback"
+)
+
+// Generate an Auth0 Sign-In URL with recommended parameters
+let (auth0URL, auth0CodeVerifier) = try auth0Provider.generateAuthorizationURL(
+    state: UUID().uuidString,
+    connection: Auth0Connection.google.rawValue, // Optional: force specific connection
+    audience: "https://your-api.example.com", // Optional: API identifier
+    scopes: ["openid", "profile", "email", "read:users"]
+)
+
+print("Auth0 Sign-In URL: \(auth0URL)")
+
+// In your callback handler, after receiving the code from Auth0:
+let (tokenResponse, claims) = try await auth0Provider.exchangeCode(
+    code: "authorization-code-from-auth0",
+    codeVerifier: auth0CodeVerifier
+)
+
+// Get the user's Auth0 profile info
+let profile = try await auth0Provider.getUserProfile(
+    accessToken: tokenResponse.accessToken
+)
+
+print("Authenticated user: \(profile.name ?? "Unknown")")
+print("Email: \(profile.email ?? "Not provided")")
+print("Auth0 ID: \(profile.sub)")
+
+// Call Auth0 Management API (requires management API token)
+let userData: Auth0ManagementUser = try await auth0Provider.callManagementAPI(
+    accessToken: managementApiToken, // Must have management API audience
+    endpoint: "/api/v2/users/\(profile.sub)"
+)
+```
+
+### Discord Sign-In
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthClientFactory()
+
+// Create Discord OAuth provider
+let discordProvider = oauthKit.discordProvider(
+    clientID: "your-discord-client-id",  // From Discord Developer Portal
+    clientSecret: "your-discord-client-secret", // From Discord Developer Portal
+    redirectURI: "https://your-app.example.com/discord-callback"
+)
+
+// Generate a Discord Sign-In URL with recommended parameters
+let (discordURL, discordCodeVerifier) = try discordProvider.generateAuthorizationURL(
+    state: UUID().uuidString,
+    prompt: .consent, // Force consent screen
+    permissions: .manageChannels, // Bot permissions using enum
+    scopes: ["identify", "email", "guilds", "connections"]
+)
+
+print("Discord Sign-In URL: \(discordURL)")
+
+// In your callback handler, after receiving the code from Discord:
+let tokenResponse = try await discordProvider.exchangeCode(
+    code: "authorization-code-from-discord",
+    codeVerifier: discordCodeVerifier
+)
+
+// Get the user's Discord profile info
+let profile = try await discordProvider.getUserProfile(
+    accessToken: tokenResponse.accessToken
+)
+
+print("Discord user: \(profile.username)#\(profile.discriminator)")
+print("Email: \(profile.email ?? "Not provided")")
+print("User ID: \(profile.id)")
+
+// Get user's Discord servers (requires 'guilds' scope)
+let guilds = try await discordProvider.getUserGuilds(
+    accessToken: tokenResponse.accessToken
+)
+
+print("User is in \(guilds.count) Discord servers")
+
+// Get user's connected accounts (requires 'connections' scope)
+let connections = try await discordProvider.getUserConnections(
+    accessToken: tokenResponse.accessToken
+)
+
+print("Connected accounts: \(connections.map { "\($0.type): \($0.name)" }.joined(separator: ", "))")
+
+// Discord Permissions Examples using OptionSet
+let basicBotPerms = DiscordPermissions.basicBot
+let moderationBotPerms = DiscordPermissions.moderationBot
+let musicBotPerms = DiscordPermissions.musicBot
+
+print("Basic bot permissions: \(basicBotPerms.rawValue)")
+print("Moderation bot permissions: \(moderationBotPerms.rawValue)")
+print("Music bot permissions: \(musicBotPerms.rawValue)")
+
+// Check specific permissions using OptionSet contains
+let hasManageMessages = moderationBotPerms.contains(.manageMessages)
+print("Moderation bot can manage messages: \(hasManageMessages)")
+
+// Custom permission combinations using array literal syntax
+let customPerms: DiscordPermissions = [.sendMessages, .manageChannels, .kickMembers]
+print("Custom permissions: \(customPerms.rawValue)")
+
+// Adding permissions using OptionSet union
+let extendedPerms = basicBotPerms.union([.manageMessages, .moderateMembers])
+print("Extended permissions: \(extendedPerms.rawValue)")
+```
+
+### LinkedIn Sign-In
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthClientFactory()
+
+// Create LinkedIn OAuth provider
+let linkedinProvider = oauthKit.linkedinProvider(
+    clientID: "your-linkedin-client-id",  // From LinkedIn Developer Console
+    clientSecret: "your-linkedin-client-secret", // From LinkedIn Developer Console
+    redirectURI: "https://your-app.example.com/linkedin-callback"
+)
+
+// Generate a LinkedIn Sign-In URL
+let (linkedinURL, linkedinCodeVerifier) = try linkedinProvider.generateAuthorizationURL(
+    state: UUID().uuidString,
+    scopes: ["openid", "profile", "email"]
+)
+
+print("LinkedIn Sign-In URL: \(linkedinURL)")
+
+// In your callback handler, after receiving the code from LinkedIn:
+let tokenResponse = try await linkedinProvider.exchangeCode(
+    code: "authorization-code-from-linkedin",
+    codeVerifier: linkedinCodeVerifier
+)
+
+// Get complete user profile (includes email)
+let completeProfile = try await linkedinProvider.getCompleteUserProfile(
+    accessToken: tokenResponse.accessToken
+)
+
+print("LinkedIn user: \(completeProfile.fullName ?? "Unknown")")
+print("Email: \(completeProfile.email ?? "Not provided")")
+print("Profile picture: \(completeProfile.profilePictureURL ?? "None")")
+
+// Or get profile and email separately if needed
+let profile = try await linkedinProvider.getUserProfile(accessToken: tokenResponse.accessToken)
+let email = try await linkedinProvider.getUserEmail(accessToken: tokenResponse.accessToken)
+```
+
+### GitLab Sign-In
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthClientFactory()
+
+// Create GitLab OAuth provider (GitLab.com)
+let gitlabProvider = oauthKit.gitlabProvider(
+    clientID: "your-gitlab-client-id",  // From GitLab application settings
+    clientSecret: "your-gitlab-client-secret", // From GitLab application settings
+    redirectURI: "https://your-app.example.com/gitlab-callback"
+)
+
+// For self-hosted GitLab instances
+let customInstance = GitLabOAuthProvider.CustomInstance(baseURL: "https://gitlab.yourcompany.com")
+let selfHostedProvider = oauthKit.gitlabProvider(
+    clientID: "your-gitlab-client-id",
+    clientSecret: "your-gitlab-client-secret",
+    redirectURI: "https://your-app.example.com/gitlab-callback",
+    customInstance: customInstance
+)
+
+// Generate a GitLab Sign-In URL
+let (gitlabURL, gitlabCodeVerifier) = try gitlabProvider.generateAuthorizationURL(
+    state: UUID().uuidString,
+    scopes: [.readUser, .readRepository, .api]
+)
+
+print("GitLab Sign-In URL: \(gitlabURL)")
+
+// In your callback handler, after receiving the code from GitLab:
+let tokenResponse = try await gitlabProvider.exchangeCode(
+    code: "authorization-code-from-gitlab",
+    codeVerifier: gitlabCodeVerifier
+)
+
+// Get the user's GitLab profile info
+let profile = try await gitlabProvider.getUserProfile(
+    accessToken: tokenResponse.accessToken
+)
+
+print("GitLab user: \(profile.username)")
+print("Name: \(profile.name)")
+print("Email: \(profile.email ?? "Not provided")")
+
+// Get user's projects
+let projects = try await gitlabProvider.getUserProjects(
+    accessToken: tokenResponse.accessToken,
+    owned: true,
+    visibility: .public
+)
+
+print("User has \(projects.count) public projects")
+
+// Get user's groups
+let groups = try await gitlabProvider.getUserGroups(
+    accessToken: tokenResponse.accessToken
+)
+
+print("User is in \(groups.count) groups")
+```
+
+### Dropbox Sign-In
+
+```swift
+import OAuthKit
+
+// Initialize OAuthKit
+let oauthKit = OAuthClientFactory()
+
+// Create Dropbox OAuth provider
+let dropboxProvider = oauthKit.dropboxProvider(
+    clientID: "your-dropbox-app-key",  // From Dropbox App Console
+    clientSecret: "your-dropbox-app-secret", // From Dropbox App Console
+    redirectURI: "https://your-app.example.com/dropbox-callback"
+)
+
+// Generate a Dropbox Sign-In URL
+let (dropboxURL, dropboxCodeVerifier) = try dropboxProvider.generateAuthorizationURL(
+    state: UUID().uuidString,
+    scopes: [.filesMetadataRead, .filesContentRead, .accountInfoRead]
+)
+
+print("Dropbox Sign-In URL: \(dropboxURL)")
+
+// In your callback handler, after receiving the code from Dropbox:
+let tokenResponse = try await dropboxProvider.exchangeCode(
+    code: "authorization-code-from-dropbox",
+    codeVerifier: dropboxCodeVerifier
+)
+
+// Get the user's Dropbox account info
+let account = try await dropboxProvider.getCurrentAccount(
+    accessToken: tokenResponse.accessToken
+)
+
+print("Dropbox user: \(account.name.displayName)")
+print("Email: \(account.email)")
+print("Account ID: \(account.accountId)")
+
+// Get space usage
+let spaceUsage = try await dropboxProvider.getSpaceUsage(
+    accessToken: tokenResponse.accessToken
+)
+
+print("Used space: \(spaceUsage.used) bytes")
+
+// List files in root folder
+let folderContents = try await dropboxProvider.listFolder(
+    accessToken: tokenResponse.accessToken,
+    path: "",
+    recursive: false
+)
+
+print("Root folder contains \(folderContents.entries.count) items")
+
+// Create a folder
+let newFolder = try await dropboxProvider.createFolder(
+    accessToken: tokenResponse.accessToken,
+    path: "/MyNewFolder"
+)
+
+print("Created folder: \(newFolder.metadata.name)")
+```
+
 ### OpenID Connect Client
 
 ```swift
@@ -522,6 +840,108 @@ Use the following guide to select the appropriate `tenantKind` parameter:
 - **`.custom("yourdomain.com")`**: Single-tenant app using your organization's domain name
 
 **Note**: The tenant configuration in your code must match the "Supported account types" setting in Azure portal.
+
+## Setting Up Auth0 Sign-In
+
+1. Go to the [Auth0 Dashboard](https://manage.auth0.com/)
+2. Create a new application or select an existing one
+3. Go to the "Settings" tab
+4. Note your **Domain** and **Client ID**
+5. Generate or note your **Client Secret**
+6. Add your callback URL to "Allowed Callback URLs" (e.g., `https://your-app.example.com/auth0-callback`)
+7. Add your app's domain to "Allowed Web Origins" if using PKCE from a web app
+8. Configure your desired connections (social, enterprise, database) in the "Connections" tab
+9. Set up any required APIs in the "APIs" section if you need to access Auth0 Management API
+
+## Setting Up Discord Sign-In
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click "New Application" or select an existing one
+3. Go to the "OAuth2" section in the sidebar
+4. Note your **Client ID** and **Client Secret**
+5. Add your redirect URI to "Redirects" (e.g., `https://your-app.example.com/discord-callback`)
+6. In the "OAuth2 URL Generator", select the scopes your app needs:
+   - `identify`: Basic user info (username, avatar, etc.)
+   - `email`: User's email address
+   - `guilds`: List of servers the user is in
+   - `connections`: User's connected accounts (Twitch, YouTube, etc.)
+7. If you're building a bot, also configure the "Bot" section and set appropriate permissions:
+   - Use `DiscordPermissions.basicBot` for simple bots
+   - Use `DiscordPermissions.moderationBot` for moderation features
+   - Use `DiscordPermissions.musicBot` for voice channel bots
+   - Use specific permissions like `.manageChannels`, `.kickMembers`, etc.
+
+## Setting Up GitLab Sign-In
+
+### For GitLab.com
+
+1. Go to [GitLab.com](https://gitlab.com) and sign in
+2. Click on your avatar in the top right, then select **Edit profile**
+3. In the left sidebar, select **Applications**
+4. Click **Add new application**
+5. Fill in the application details:
+   - **Name**: Your application name
+   - **Redirect URI**: Your callback URL (e.g., `https://your-app.example.com/gitlab-callback`)
+   - **Scopes**: Select the permissions your app needs:
+     - `read_user`: Read user profile information
+     - `read_repository`: Read repository data
+     - `api`: Full API access
+     - `read_api`: Read-only API access
+6. Click **Save application**
+7. Note your **Application ID** (client ID) and **Secret**
+
+### For Self-Hosted GitLab
+
+The process is the same, but you'll use your GitLab instance URL and configure the `CustomInstance`:
+
+```swift
+let customInstance = GitLabOAuthProvider.CustomInstance(baseURL: "https://gitlab.yourcompany.com")
+let provider = oauthKit.gitlabProvider(
+    clientID: "your-client-id",
+    clientSecret: "your-client-secret",
+    redirectURI: "https://your-app.com/callback",
+    customInstance: customInstance
+)
+```
+
+## Setting Up Dropbox Sign-In
+
+1. Go to the [Dropbox App Console](https://www.dropbox.com/developers/apps)
+2. Click **Create app**
+3. Choose your app configuration:
+   - **Choose an API**: Dropbox API
+   - **Choose the type of access you need**:
+     - App folder: Access to a single folder
+     - Full Dropbox: Access to all files and folders
+   - **Name your app**: Enter a unique name
+4. Click **Create app**
+5. In your app settings:
+   - Note your **App key** (client ID) and **App secret**
+   - Add your redirect URI to **Redirect URIs**
+6. Configure permissions in the **Permissions** tab:
+   - `account_info.read`: Read account information
+   - `files.metadata.read`: Read file and folder metadata
+   - `files.content.read`: Read file contents
+   - `files.content.write`: Write file contents
+   - `sharing.read`: Read sharing information
+   - `sharing.write`: Create and modify shared links
+
+## Setting Up LinkedIn Sign-In
+
+1. Go to the [LinkedIn Developer Console](https://www.linkedin.com/developers/)
+2. Click "Create App" or select an existing app
+3. Fill in the required information and verify your identity
+4. Go to the "Auth" tab
+5. Note your **Client ID** and **Client Secret**
+6. Add your redirect URL to "Authorized redirect URLs for your app" (e.g., `https://your-app.example.com/linkedin-callback`)
+7. In the "Products" tab, add the products you need:
+   - **Sign In with LinkedIn using OpenID Connect**: For basic authentication
+   - **Share on LinkedIn**: If you need to post content
+   - **Marketing Developer Platform**: For marketing APIs
+8. Configure the required scopes in your app:
+   - `openid`: Required for OpenID Connect
+   - `profile`: Basic profile information
+   - `email`: User's email address
 
 ## Contributing
 

@@ -16,6 +16,7 @@ import AsyncHTTPClient
 import Foundation
 import NIOCore
 import NIOFoundationCompat
+import NIOHTTP1
 
 /// Provider for Okta OAuth2/OpenID Connect authentication
 public struct OktaOAuthProvider: Sendable {
@@ -112,6 +113,22 @@ public struct OktaOAuthProvider: Sendable {
         try await client.exchangeCode(
             code: code,
             codeVerifier: codeVerifier
+        )
+    }
+
+    /// Refresh an access token using a refresh token
+    /// - Parameters:
+    ///   - refreshToken: The refresh token
+    ///   - additionalParameters: Additional parameters to include in the token request
+    /// - Returns: The token response and ID token claims
+    /// - Throws: OAuth2Error if the token refresh fails
+    public func refreshAccessToken(
+        refreshToken: String,
+        additionalParameters: [String: String] = [:]
+    ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims?) {
+        try await client.refreshToken(
+            refreshToken,
+            additionalParameters: additionalParameters
         )
     }
 
@@ -218,6 +235,302 @@ public struct OktaOAuthProvider: Sendable {
 
         // A successful revocation returns a 200 OK with an empty response body
         return response.status == .ok
+    }
+
+    // MARK: - MFA Challenge Flow Support
+
+    /// Authenticate with username and password to initiate MFA challenge
+    /// - Parameters:
+    ///   - username: User's username or email
+    ///   - password: User's password
+    /// - Returns: MFA challenge response with available factors
+    /// - Throws: OktaMFAError or OAuth2Error if authentication fails
+    public func authenticateWithPassword(
+        username: String,
+        password: String
+    ) async throws -> OktaMFAChallenge {
+        let baseURL = extractBaseURL()
+        let authURL = "\(baseURL)/api/v1/authn"
+
+        let request = [
+            "username": username,
+            "password": password,
+        ]
+
+        return try await makeOktaAPIRequest(
+            url: authURL,
+            method: HTTPMethod.POST,
+            body: request,
+            responseType: OktaMFAChallenge.self
+        )
+    }
+
+    /// Verify an MFA factor
+    /// - Parameters:
+    ///   - factorId: The ID of the MFA factor to verify
+    ///   - stateToken: The state token from the MFA challenge
+    ///   - verifyRequest: The verification request with code or other data
+    /// - Returns: MFA verification response
+    /// - Throws: OktaMFAError if verification fails
+    public func verifyMFAFactor(
+        factorId: String,
+        stateToken: String,
+        verifyRequest: OktaMFAVerifyRequest
+    ) async throws -> OktaMFAVerifyResponse {
+        let baseURL = extractBaseURL()
+        let verifyURL = "\(baseURL)/api/v1/authn/factors/\(factorId)/verify"
+
+        return try await makeOktaAPIRequest(
+            url: verifyURL,
+            method: HTTPMethod.POST,
+            body: verifyRequest,
+            responseType: OktaMFAVerifyResponse.self
+        )
+    }
+
+    /// Initiate push notification for Okta Verify
+    /// - Parameters:
+    ///   - factorId: The ID of the push factor
+    ///   - stateToken: The state token from the MFA challenge
+    /// - Returns: MFA verification response with challenge context
+    /// - Throws: OktaMFAError if push initiation fails
+    public func initiateOktaVerifyPush(
+        factorId: String,
+        stateToken: String
+    ) async throws -> OktaMFAVerifyResponse {
+        let verifyRequest = OktaMFAVerifyRequest(
+            stateToken: stateToken,
+            autoPush: true
+        )
+
+        return try await verifyMFAFactor(
+            factorId: factorId,
+            stateToken: stateToken,
+            verifyRequest: verifyRequest
+        )
+    }
+
+    /// Poll for push notification completion
+    /// - Parameters:
+    ///   - factorId: The ID of the push factor
+    ///   - stateToken: The state token from the MFA challenge
+    ///   - timeout: Maximum time to wait in seconds (default 60)
+    ///   - interval: Polling interval in seconds (default 2)
+    /// - Returns: MFA poll result when push is approved or denied
+    /// - Throws: OktaMFAError if polling fails or times out
+    public func pollForPushApproval(
+        factorId: String,
+        stateToken: String,
+        timeout: TimeInterval = 60,
+        interval: TimeInterval = 2
+    ) async throws -> OktaMFAPollResult {
+        let baseURL = extractBaseURL()
+        let pollURL = "\(baseURL)/api/v1/authn/factors/\(factorId)/poll"
+
+        let startTime = Date()
+
+        while Date().timeIntervalSince(startTime) < timeout {
+            do {
+                let pollRequest = ["stateToken": stateToken]
+                let result = try await makeOktaAPIRequest(
+                    url: pollURL,
+                    method: HTTPMethod.POST,
+                    body: pollRequest,
+                    responseType: OktaMFAPollResult.self
+                )
+
+                // Check if push was approved or denied
+                if result.status == .success || result.factorResult == "SUCCESS" {
+                    return result
+                } else if result.factorResult == "REJECTED" || result.factorResult == "TIMEOUT" {
+                    throw OktaMFAError.userDenied
+                }
+
+                // Continue polling
+                try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+
+            } catch OktaMFAError.userDenied {
+                throw OktaMFAError.userDenied
+            } catch {
+                // Continue polling on other errors
+                try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            }
+        }
+
+        throw OktaMFAError.challengeTimeout
+    }
+
+    /// Complete MFA flow and get session token
+    /// - Parameters:
+    ///   - stateToken: The state token from successful MFA verification
+    /// - Returns: Session token for completing OAuth flow
+    /// - Throws: OktaMFAError if session token exchange fails
+    public func getSessionToken(stateToken: String) async throws -> String {
+        let baseURL = extractBaseURL()
+        let sessionURL = "\(baseURL)/api/v1/sessions"
+
+        let request = ["sessionToken": stateToken]
+
+        struct SessionResponse: Codable {
+            let id: String
+        }
+
+        let response = try await makeOktaAPIRequest(
+            url: sessionURL,
+            method: HTTPMethod.POST,
+            body: request,
+            responseType: SessionResponse.self
+        )
+
+        return response.id
+    }
+
+    /// Generate authorization URL with MFA session token for OAuth flow completion
+    /// - Parameters:
+    ///   - sessionToken: Session token from completed MFA flow
+    ///   - state: State parameter for OAuth flow (defaults to UUID if not provided)
+    ///   - scopes: OAuth scopes to request
+    /// - Returns: Authorization URL and code verifier for OAuth flow completion
+    /// - Throws: OAuth2Error if URL generation fails
+    public func generateAuthURLWithSession(
+        sessionToken: String,
+        state: String? = nil,
+        scopes: [String] = ["openid", "profile", "email"]
+    ) async throws -> (url: URL, codeVerifier: String?) {
+        try await generateAuthorizationURL(
+            state: state ?? UUID().uuidString,
+            additionalParameters: ["sessionToken": sessionToken],
+            scopes: scopes
+        )
+    }
+
+    // MARK: - Helper Methods
+
+    /// Extract base URL from OpenID Connect configuration
+    private func extractBaseURL() -> String {
+        let issuer = client.configuration.issuer
+        // Remove /.well-known/openid_configuration or /oauth2/default if present
+        if issuer.contains("/oauth2/") {
+            return String(issuer.prefix(while: { $0 != "/" }) + "://" + issuer.drop(while: { $0 != "/" }).dropFirst().prefix(while: { $0 != "/" }))
+        }
+        return issuer
+    }
+
+    /// Make authenticated API request to Okta
+    private func makeOktaAPIRequest<T: Codable, U: Codable>(
+        url: String,
+        method: HTTPMethod,
+        body: T,
+        responseType: U.Type
+    ) async throws -> U {
+        var request = HTTPClientRequest(url: url)
+        request.method = method
+        request.headers.add(name: "Content-Type", value: "application/json")
+        request.headers.add(name: "Accept", value: "application/json")
+        request.headers.add(name: "User-Agent", value: USER_AGENT)
+
+        // Encode request body
+        let encoder = JSONEncoder()
+        let bodyData = try encoder.encode(body)
+        request.body = .bytes(bodyData)
+
+        let response = try await oauthKit.httpClient.execute(request, timeout: .seconds(60))
+
+        let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
+        let responseData = Data(buffer: responseBody)
+
+        guard response.status.code >= 200 && response.status.code < 300 else {
+            // Try to parse error response
+            if let errorString = String(data: responseData, encoding: .utf8) {
+                throw OktaMFAError.apiError("HTTP \(response.status.code): \(errorString)")
+            } else {
+                throw OktaMFAError.apiError("HTTP \(response.status.code)")
+            }
+        }
+
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode(responseType, from: responseData)
+        } catch {
+            throw OktaMFAError.apiError("Failed to decode response: \(error)")
+        }
+    }
+
+    /// Complete Okta MFA authentication flow with push notification
+    /// - Parameters:
+    ///   - username: User's username or email
+    ///   - password: User's password
+    ///   - preferredFactorType: Preferred MFA factor type (default: push)
+    ///   - state: OAuth state parameter (optional, defaults to UUID)
+    ///   - scopes: OAuth scopes to request
+    /// - Returns: Authorization URL and code verifier for OAuth flow completion
+    /// - Throws: OktaMFAError or OAuth2Error if authentication fails
+    public func authenticateWithMFA(
+        username: String,
+        password: String,
+        preferredFactorType: OktaMFAFactorType = .push,
+        state: String? = nil,
+        scopes: [String] = ["openid", "profile", "email"]
+    ) async throws -> (url: URL, codeVerifier: String?) {
+        // Step 1: Authenticate with username/password
+        let mfaChallenge = try await authenticateWithPassword(username: username, password: password)
+
+        // Step 2: Find preferred factor
+        guard let factor = mfaChallenge.factors.first(where: { $0.factorType == preferredFactorType }) else {
+            throw OktaMFAError.factorNotFound
+        }
+
+        // Step 3: Handle different factor types
+        let verifyResponse: OktaMFAVerifyResponse
+
+        switch preferredFactorType {
+        case .push:
+            // Initiate push notification
+            verifyResponse = try await initiateOktaVerifyPush(
+                factorId: factor.id,
+                stateToken: mfaChallenge.stateToken
+            )
+
+            // Show challenge number to user if available
+            if let challengeNumber = verifyResponse.challengeContext?.challengeNumber {
+                print("Okta Verify Push: Please approve the notification and verify the number: \(challengeNumber)")
+            }
+
+            // Poll for approval
+            let pollResult = try await pollForPushApproval(
+                factorId: factor.id,
+                stateToken: mfaChallenge.stateToken,
+                timeout: 60
+            )
+
+            guard let sessionToken = pollResult.sessionToken else {
+                throw OktaMFAError.factorVerificationFailed("No session token received")
+            }
+
+            // Generate OAuth URL with session token for flow completion
+            return try await generateAuthURLWithSession(
+                sessionToken: sessionToken,
+                state: state,
+                scopes: scopes
+            )
+
+        default:
+            throw OktaMFAError.invalidFactorType("Factor type \(preferredFactorType.rawValue) not yet implemented")
+        }
+    }
+
+    /// Get available MFA factors for a user
+    /// - Parameters:
+    ///   - username: User's username or email
+    ///   - password: User's password
+    /// - Returns: List of available MFA factors
+    /// - Throws: OktaMFAError if authentication fails
+    public func getAvailableMFAFactors(
+        username: String,
+        password: String
+    ) async throws -> [OktaMFAFactor] {
+        let mfaChallenge = try await authenticateWithPassword(username: username, password: password)
+        return mfaChallenge.factors
     }
 }
 

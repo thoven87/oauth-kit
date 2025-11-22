@@ -34,6 +34,9 @@ public struct TokenResponse: Codable, Sendable {
     /// The ID token for OpenID Connect
     public let idToken: String?
 
+    /// The type of token issued (for token exchange scenarios)
+    public let issuedTokenType: TokenType?
+
     /// Creation timestamp, used for calculating expiration
     public let createdAt: Date
 
@@ -44,6 +47,7 @@ public struct TokenResponse: Codable, Sendable {
         refreshToken: String? = nil,
         scope: String? = nil,
         idToken: String? = nil,
+        issuedTokenType: TokenType? = nil,
         createdAt: Date = Date()
     ) {
         self.accessToken = accessToken
@@ -52,6 +56,7 @@ public struct TokenResponse: Codable, Sendable {
         self.refreshToken = refreshToken
         self.scope = scope
         self.idToken = idToken
+        self.issuedTokenType = issuedTokenType
         self.createdAt = createdAt
     }
 
@@ -63,6 +68,7 @@ public struct TokenResponse: Codable, Sendable {
         case refreshToken = "refresh_token"
         case scope
         case idToken = "id_token"
+        case issuedTokenType = "issued_token_type"
     }
 
     /// Initialize a new token response
@@ -74,6 +80,7 @@ public struct TokenResponse: Codable, Sendable {
         refreshToken = try container.decodeIfPresent(String.self, forKey: .refreshToken)
         scope = try container.decodeIfPresent(String.self, forKey: .scope)
         idToken = try container.decodeIfPresent(String.self, forKey: .idToken)
+        issuedTokenType = try container.decodeIfPresent(TokenType.self, forKey: .issuedTokenType)
         createdAt = Date()
     }
 
