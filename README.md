@@ -286,24 +286,55 @@ gmailRequest.headers.add(name: "Authorization", value: "Bearer \(delegatedJWT)")
 // Initialize OAuthKit
 let oauthKit = OAuthClientFactory()
 
-// Create Microsoft OAuth provider
-// For multi-tenant applications (works with any Microsoft account):
-let microsoftProvider = oauthKit.microsoftMultiTenantProvider(
+// Create Microsoft OAuth provider with different tenant configurations:
+
+// Multi-tenant (personal + work/school accounts) - DEFAULT
+let microsoftProvider = try await oauthKit.microsoftProvider(
     clientID: "your-azure-client-id",  // From Azure portal
     clientSecret: "your-azure-client-secret", // From Azure portal
-    redirectURI: "https://your-app.example.com/ms-callback", // Must match Azure portal
+    redirectURI: "https://your-app.example.com/ms-callback" // Must match Azure portal
+    // tenantKind defaults to .common
 )
 
-// Alternatively, for single-tenant (organization-specific) applications:
-/*
-let microsoftProvider = try await microsoftProvider.microsoftProvider(
+// Personal Microsoft accounts only (@outlook.com, @hotmail.com, @live.com)
+let consumerProvider = try await oauthKit.microsoftProvider(
     clientID: "your-azure-client-id",
     clientSecret: "your-azure-client-secret",
-    tenantID: "your-tenant-id", // Specific to your organization
     redirectURI: "https://your-app.example.com/ms-callback",
-    scope: "openid profile email User.Read"
+    tenantKind: .consumers
 )
-*/
+
+// Work/school accounts only (any organization)
+let orgProvider = try await oauthKit.microsoftProvider(
+    clientID: "your-azure-client-id",
+    clientSecret: "your-azure-client-secret",
+    redirectURI: "https://your-app.example.com/ms-callback",
+    tenantKind: .organizations
+)
+
+// Specific tenant by ID (single-tenant application)
+let specificProvider = try await oauthKit.microsoftProvider(
+    clientID: "your-azure-client-id",
+    clientSecret: "your-azure-client-secret",
+    redirectURI: "https://your-app.example.com/ms-callback",
+    tenantKind: .custom("8eaef023-2b34-4da1-9baa-8bc8c9d6a490") // Your tenant ID
+)
+
+// Specific tenant by domain
+let domainProvider = try await oauthKit.microsoftProvider(
+    clientID: "your-azure-client-id",
+    clientSecret: "your-azure-client-secret",
+    redirectURI: "https://your-app.example.com/ms-callback",
+    tenantKind: .custom("contoso.com") // Your organization's domain
+)
+
+// Using string literals (also supported)
+let stringLiteralProvider = try await oauthKit.microsoftProvider(
+    clientID: "your-azure-client-id",
+    clientSecret: "your-azure-client-secret",
+    redirectURI: "https://your-app.example.com/ms-callback",
+    tenantKind: "common" // Automatically converted to .common
+)
 
 // Generate a Microsoft Sign-In URL with recommended parameters
 let (msAuthURL, msCodeVerifier) = try microsoftProvider.generateAuthorizationURL(
@@ -457,26 +488,40 @@ For domain-wide delegation (optional):
 2. Navigate to "Azure Active Directory" > "App registrations"
 3. Click "New registration"
 4. Enter a name for your application
-5. Select the appropriate supported account type:
-   - "Accounts in this organizational directory only" for single-tenant apps
-   - "Accounts in any organizational directory" for multi-tenant organizational apps
-   - "Accounts in any organizational directory and personal Microsoft accounts" for consumer+work accounts
+5. Select the appropriate supported account type (this determines which `MicrosoftTenantIDKind` you'll use):
+   - **"Accounts in this organizational directory only"** → Use `.custom("your-tenant-id")` for single-tenant
+   - **"Accounts in any organizational directory"** → Use `.organizations` for work/school accounts only
+   - **"Accounts in any organizational directory and personal Microsoft accounts"** → Use `.common` (default) for multi-tenant
+   - **"Personal Microsoft accounts only"** → Use `.consumers` for personal accounts only
 6. Add your redirect URI (e.g., `https://your-app.example.com/ms-callback`)
 7. Click "Register"
 8. Note your "Application (client) ID" shown on the overview page
-9. For the client secret:
-   - Go to "Certificates & secrets"
-   - Click "New client secret"
-   - Add a description and select an expiration
-   - Click "Add"
-   - **Important**: Copy the secret value immediately (you won't be able to see it later)
-10. For Microsoft Graph API permissions:
+9. **Important for single-tenant apps**: Also note your "Directory (tenant) ID" from the overview page
+10. For the client secret:
+    - Go to "Certificates & secrets"
+    - Click "New client secret"
+    - Add a description and select an expiration
+    - Click "Add"
+    - **Important**: Copy the secret value immediately (you won't be able to see it later)
+11. For Microsoft Graph API permissions:
     - Go to "API permissions"
     - Click "Add a permission"
     - Select "Microsoft Graph"
     - Choose "Delegated permissions"
     - Add the permissions your app needs (e.g., User.Read, email, profile, etc.)
     - Click "Add permissions"
+
+### Choosing the Right Tenant Configuration
+
+Use the following guide to select the appropriate `tenantKind` parameter:
+
+- **`.common`** (default): Multi-tenant app accepting both personal (@outlook.com, @hotmail.com) and work/school accounts
+- **`.consumers`**: Only personal Microsoft accounts (good for consumer apps)
+- **`.organizations`**: Only work/school accounts from any organization (good for B2B apps)
+- **`.custom("your-tenant-id")`**: Single-tenant app for a specific organization only
+- **`.custom("yourdomain.com")`**: Single-tenant app using your organization's domain name
+
+**Note**: The tenant configuration in your code must match the "Supported account types" setting in Azure portal.
 
 ## Contributing
 

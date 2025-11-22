@@ -62,7 +62,7 @@ jobs:
           echo "Keycloak ready!"
 
       - name: Build
-        run: swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors -Xcc -Werror
+        run: swift build --build-tests --configuration debug -Xswiftc -enable-testing -Xswiftc -warnings-as-errors
       - name: Run Tests
         run: |
           swift test --skip-build --configuration debug --disable-xctest

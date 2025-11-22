@@ -111,49 +111,27 @@ public struct OAuthClientFactory: Sendable {
     }
 
     /// Create a Microsoft OAuth provider for Microsoft 365 / Azure AD Sign-In
-    /// for multi-tenant applications
     /// - Parameters:
     ///   - clientID: The client/application ID from Azure portal
     ///   - clientSecret: The client secret from Azure portal
     ///   - redirectURI: The redirect URI registered with Azure
+    ///   - tenantKind: The type of Microsoft tenant to authenticate against (defaults to .common for multi-tenant)
     /// - Returns: A Microsoft OAuth provider
-    public func microsoftMultiTenantProvider(
-        clientID: String,
-        clientSecret: String,
-        redirectURI: String
-    ) async throws -> MicrosoftOAuthProvider {
-        MicrosoftOAuthProvider(
-            oauthKit: self,
-            openIDConnectClient: try await openIDConnectClient(
-                discoveryURL: MicrosoftOAuthProvider.commonDiscoveryURL,
-                clientID: clientID,
-                clientSecret: clientSecret,
-                redirectURI: redirectURI
-            )
-        )
-    }
-
-    /// Create a Microsoft OpenID Connect client for a specific tenant
-    /// - Parameters:
-    ///   - clientID: The client/application ID from Azure portal
-    ///   - clientSecret: The client secret from Azure portal
-    ///   - tenantID: The Azure AD tenant ID
-    ///   - redirectURI: The redirect URI registered with Azure
-    /// - Returns: An OpenID Connect client configured for Microsoft
     public func microsoftProvider(
         clientID: String,
         clientSecret: String,
-        tenantID: String,
-        redirectURI: String
+        redirectURI: String,
+        tenantKind: MicrosoftTenantIDKind = .common
     ) async throws -> MicrosoftOAuthProvider {
         MicrosoftOAuthProvider(
             oauthKit: self,
             openIDConnectClient: try await openIDConnectClient(
-                discoveryURL: MicrosoftOAuthProvider.tenantDiscoveryURL(tenantID: tenantID),
+                discoveryURL: MicrosoftOAuthProvider.discoveryURL(for: tenantKind),
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI
-            )
+            ),
+            tenantKind: tenantKind
         )
     }
 
