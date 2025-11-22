@@ -22,11 +22,11 @@ public struct MicrosoftOAuthProvider: Sendable {
     /// Microsoft's common (multi-tenant) OAuth2/OIDC discovery URL
     public static let commonDiscoveryURL = "https://login.microsoftonline.com/common/v2.0/"
 
-    /// Generate Microsoft's tenant-specific discovery URL
-    /// - Parameter tenantID: The Azure AD tenant ID
-    /// - Returns: The discovery URL for the specified tenant
-    public static func tenantDiscoveryURL(tenantID: String) -> String {
-        "https://login.microsoftonline.com/\(tenantID)/v2.0/"
+    /// Generate Microsoft's discovery URL for a specific tenant kind
+    /// - Parameter tenantKind: The Microsoft tenant kind
+    /// - Returns: The discovery URL for the specified tenant kind
+    public static func discoveryURL(for tenantKind: MicrosoftTenantIDKind) -> String {
+        tenantKind.discoveryURL
     }
 
     /// The OAuthKit instance
@@ -35,12 +35,18 @@ public struct MicrosoftOAuthProvider: Sendable {
     /// The OpenID Connect client configured for Microsoft
     private let client: OpenIDConnectClient
 
+    /// The tenant kind this provider is configured for
+    public let tenantKind: MicrosoftTenantIDKind
+
     /// Initialize a new Microsoft OAuth provider
-    /// - Parameter oauthKit: The OAuthKit instance
-    /// - Parameter openIDConnectClient: The OpenID Connect client configured for Microsoft
-    internal init(oauthKit: OAuthClientFactory, openIDConnectClient client: OpenIDConnectClient) {
+    /// - Parameters:
+    ///   - oauthKit: The OAuthKit instance
+    ///   - openIDConnectClient: The OpenID Connect client configured for Microsoft
+    ///   - tenantKind: The tenant kind this provider is configured for
+    internal init(oauthKit: OAuthClientFactory, openIDConnectClient client: OpenIDConnectClient, tenantKind: MicrosoftTenantIDKind) {
         self.oauthKit = oauthKit
         self.client = client
+        self.tenantKind = tenantKind
     }
 
     /// Generate an authorization URL for Microsoft Sign-In with recommended parameters
