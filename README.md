@@ -37,15 +37,6 @@ A Swift OAuth2 and OpenID Connect client library with modern async/await support
 - Cross-platform support (macOS and Linux)
 - Swift 6.0+ with strict concurrency support
 
-## What's New in v1.1
-
-🚀 **New RFC Implementations:**
-- **Token Exchange (RFC 8693)**: Secure token delegation for microservices
-- **Token Introspection (RFC 7662)**: Validate and inspect token metadata
-- **Token Revocation (RFC 7009)**: Properly invalidate tokens
-
-See [RFC_IMPLEMENTATIONS.md](RFC_IMPLEMENTATIONS.md) for detailed usage examples.
-
 ## Requirements
 
 - Swift 6.0+

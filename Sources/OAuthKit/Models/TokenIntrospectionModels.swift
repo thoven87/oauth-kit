@@ -13,47 +13,45 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import JWTKit
 
-/// Token introspection response as defined in RFC 7662
-public struct TokenIntrospectionResponse: Codable, @unchecked Sendable {
+/// Token introspection response as defined in RFC 7662 using JWT-Kit claims
+public struct TokenIntrospectionResponse: JWTPayload {
     /// Whether the token is active
-    public let active: Bool
+    public let active: BoolClaim
 
     /// The scope associated with the token
-    public let scope: String?
+    public let scope: StringClaim?
 
     /// The client identifier for the OAuth 2.0 client that requested this token
-    public let clientID: String?
+    public let clientID: StringClaim?
 
     /// The username of the resource owner who authorized this token
-    public let username: String?
+    public let username: StringClaim?
 
     /// The token type (e.g., "Bearer")
-    public let tokenType: String?
+    public let tokenType: StringClaim?
 
-    /// The expiration time as seconds since Unix epoch
-    public let exp: Int?
+    /// The expiration time with built-in validation
+    public let exp: ExpirationClaim?
 
-    /// The time when the token was issued as seconds since Unix epoch
-    public let iat: Int?
+    /// The time when the token was issued with built-in validation
+    public let iat: IssuedAtClaim?
 
-    /// The time before which the token must not be accepted as seconds since Unix epoch
-    public let nbf: Int?
+    /// The time before which the token must not be accepted with built-in validation
+    public let nbf: NotBeforeClaim?
 
     /// The subject of the token - usually the user identifier
-    public let sub: String?
+    public let sub: SubjectClaim?
 
-    /// The intended audience for this token
-    public let aud: [String]?
+    /// The intended audience for this token with validation support
+    public let aud: AudienceClaim?
 
     /// The issuer of this token
-    public let iss: String?
+    public let iss: IssuerClaim?
 
     /// The unique identifier for this token
-    public let jti: String?
-
-    /// Additional custom claims (extension point)
-    public let additionalClaims: [String: Any]?
+    public let jti: IDClaim?
 
     /// Initialize a token introspection response
     public init(
@@ -62,28 +60,26 @@ public struct TokenIntrospectionResponse: Codable, @unchecked Sendable {
         clientID: String? = nil,
         username: String? = nil,
         tokenType: String? = nil,
-        exp: Int? = nil,
-        iat: Int? = nil,
-        nbf: Int? = nil,
+        exp: Date? = nil,
+        iat: Date? = nil,
+        nbf: Date? = nil,
         sub: String? = nil,
         aud: [String]? = nil,
         iss: String? = nil,
-        jti: String? = nil,
-        additionalClaims: [String: Any]? = nil
+        jti: String? = nil
     ) {
-        self.active = active
-        self.scope = scope
-        self.clientID = clientID
-        self.username = username
-        self.tokenType = tokenType
-        self.exp = exp
-        self.iat = iat
-        self.nbf = nbf
-        self.sub = sub
-        self.aud = aud
-        self.iss = iss
-        self.jti = jti
-        self.additionalClaims = additionalClaims
+        self.active = BoolClaim(value: active)
+        self.scope = scope.map { StringClaim(value: $0) }
+        self.clientID = clientID.map { StringClaim(value: $0) }
+        self.username = username.map { StringClaim(value: $0) }
+        self.tokenType = tokenType.map { StringClaim(value: $0) }
+        self.exp = exp.map { ExpirationClaim(value: $0) }
+        self.iat = iat.map { IssuedAtClaim(value: $0) }
+        self.nbf = nbf.map { NotBeforeClaim(value: $0) }
+        self.sub = sub.map { SubjectClaim(value: $0) }
+        self.aud = aud.map { AudienceClaim(value: $0) }
+        self.iss = iss.map { IssuerClaim(value: $0) }
+        self.jti = jti.map { IDClaim(value: $0) }
     }
 
     /// Coding keys for mapping JSON fields to properties
@@ -96,52 +92,18 @@ public struct TokenIntrospectionResponse: Codable, @unchecked Sendable {
         case exp, iat, nbf, sub, aud, iss, jti
     }
 
-    /// Custom decoder to handle additional claims
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+    /// JWT validation - verifies token claims
+    public func verify(using algorithm: some JWTAlgorithm) async throws {
+        // Verify expiration if present
+        try exp?.verifyNotExpired()
 
-        active = try container.decode(Bool.self, forKey: .active)
-        scope = try container.decodeIfPresent(String.self, forKey: .scope)
-        clientID = try container.decodeIfPresent(String.self, forKey: .clientID)
-        username = try container.decodeIfPresent(String.self, forKey: .username)
-        tokenType = try container.decodeIfPresent(String.self, forKey: .tokenType)
-        exp = try container.decodeIfPresent(Int.self, forKey: .exp)
-        iat = try container.decodeIfPresent(Int.self, forKey: .iat)
-        nbf = try container.decodeIfPresent(Int.self, forKey: .nbf)
-        sub = try container.decodeIfPresent(String.self, forKey: .sub)
-
-        // Handle audience as either string or array
-        if let audString = try? container.decodeIfPresent(String.self, forKey: .aud) {
-            aud = [audString]
-        } else {
-            aud = try container.decodeIfPresent([String].self, forKey: .aud)
+        // Verify not-before if present
+        if let nbf = nbf {
+            try nbf.verifyNotBefore()
         }
-
-        iss = try container.decodeIfPresent(String.self, forKey: .iss)
-        jti = try container.decodeIfPresent(String.self, forKey: .jti)
-
-        // Capture any additional claims not covered by standard fields
-        let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
-        var additional: [String: Any] = [:]
-
-        for key in allKeys.allKeys {
-            // Skip standard RFC 7662 fields
-            let standardFields: Set<String> = [
-                "active", "scope", "client_id", "username", "token_type",
-                "exp", "iat", "nbf", "sub", "aud", "iss", "jti",
-            ]
-
-            if !standardFields.contains(key.stringValue) {
-                if let codableValue = try? allKeys.decode(AnyCodable.self, forKey: key) {
-                    additional[key.stringValue] = codableValue.underlying
-                }
-            }
-        }
-
-        additionalClaims = additional.isEmpty ? nil : additional
     }
 
-    /// Check if the token is expired
+    /// Check if the token is expired with buffer time
     /// - Parameter buffer: Buffer time in seconds before actual expiration to consider the token expired
     /// - Returns: True if the token is expired or will expire within the buffer time
     public func isExpired(buffer: TimeInterval = 60) -> Bool {
@@ -149,10 +111,8 @@ public struct TokenIntrospectionResponse: Codable, @unchecked Sendable {
             return false
         }
 
-        let expirationDate = Date(timeIntervalSince1970: TimeInterval(exp))
         let bufferDate = Date().addingTimeInterval(buffer)
-
-        return bufferDate >= expirationDate
+        return bufferDate >= exp.value
     }
 
     /// Check if the token is not yet valid
@@ -162,26 +122,22 @@ public struct TokenIntrospectionResponse: Codable, @unchecked Sendable {
             return false
         }
 
-        let notBeforeDate = Date(timeIntervalSince1970: TimeInterval(nbf))
-        return Date() < notBeforeDate
+        return Date() < nbf.value
     }
 
     /// Get expiration date if available
     public var expirationDate: Date? {
-        guard let exp = exp else { return nil }
-        return Date(timeIntervalSince1970: TimeInterval(exp))
+        exp?.value
     }
 
     /// Get issued at date if available
     public var issuedAtDate: Date? {
-        guard let iat = iat else { return nil }
-        return Date(timeIntervalSince1970: TimeInterval(iat))
+        iat?.value
     }
 
     /// Get not before date if available
     public var notBeforeDate: Date? {
-        guard let nbf = nbf else { return nil }
-        return Date(timeIntervalSince1970: TimeInterval(nbf))
+        nbf?.value
     }
 }
 
