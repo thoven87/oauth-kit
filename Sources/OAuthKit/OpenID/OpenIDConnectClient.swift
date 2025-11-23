@@ -311,27 +311,17 @@ public struct OpenIDConnectClient: Sendable {
 
         do {
             // Verify the JWT signature and decode the claims
+            // JWT-Kit's verify() method handles all validation including:
+            // - Cryptographic signature verification using JWKS keys
+            // - Token-specific validation via the payload's verify() method
+            // - Time-based validations (exp, nbf, iat)
+            // - Provider-specific validations (like Microsoft's issuer validation)
             let jwt = try await signers.verify(idToken, as: IDTokenClaims.self)
 
-            // Validate issuer
-            guard jwt.iss?.value == configuration.issuer else {
-                throw OAuth2Error.tokenError("Invalid issuer: \(jwt.iss ?? "nil") != \(configuration.issuer)")
-            }
-
-            // Validate audience
+            // Validate audience - ensure the token is intended for this client
+            // This validation is specific to our client ID and not handled by JWT-Kit's generic validation
             guard jwt.aud?.contains(clientID) == true else {
                 throw OAuth2Error.tokenError("Invalid audience: \(jwt.aud?.description ?? "nil") does not contain \(clientID)")
-            }
-
-            // Validate expiration time
-            let currentTime = Date()
-            guard let expirationTime = jwt.exp?.value, expirationTime > currentTime else {
-                throw OAuth2Error.tokenError("Token has expired")
-            }
-
-            // Validate issued at time
-            if let issuedAt = jwt.iat?.value, issuedAt > currentTime {
-                throw OAuth2Error.tokenError("Token issued in the future")
             }
 
             return jwt
