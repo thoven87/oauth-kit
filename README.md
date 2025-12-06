@@ -85,9 +85,9 @@ let (codeVerifier, codeChallenge) = OAuth2Client.generatePKCE()
 
 // Generate an authorization URL for the user to visit
 let authURL = try oauth2Client.generateAuthorizationURL(
-    state: "random-state-value",
+    state: "random-state-value", // or base64 encoded return to or some hash
     codeChallenge: codeChallenge,
-    scopes: ["profile", "email", "offline_access"]
+    scopes: ["openid", "profile", "email"]
 )
 
 print("Visit this URL to authorize: \(authURL)")
@@ -120,9 +120,9 @@ let googleProvider = try await oauthClient.googleProvider(
 // Generate a Google Sign-In URL with recommended parameters
 let (googleAuthURL, googleCodeVerifier) = try googleProvider.generateAuthURL(
     state: UUID().uuidString,
-    prompt: .selectAccount, // Force account selection screen
+    prompt: .consent
     loginHint: "user@example.com" // Optional: pre-fill email,
-    scopes: ["profile", "email", "offline_access"]
+    scopes: ["openid", "profile", "email"]
 )
 
 print("Google Sign-In URL: \(googleAuthURL)")
@@ -354,9 +354,9 @@ let stringLiteralProvider = try await oauthKit.microsoftProvider(
 // Generate a Microsoft Sign-In URL with recommended parameters
 let (msAuthURL, msCodeVerifier) = try microsoftProvider.generateAuthorizationURL(
     state: UUID().uuidString,
-    prompt: .selectAccount, // Force account selection
+    prompt: .consent, // Force account selection
     domainHint: .organizations, // Hint for work/school accounts, use .consumers for personal accounts
-    scopes: ["openid", "profile", "email", "User.Read"] // Include Graph API permissions as needed
+    scopes: ["openid", "profile", "email", "offline_access", "User.Read"] // Include Graph API permissions as needed
 )
 
 print("Microsoft Sign-In URL: \(msAuthURL)")
