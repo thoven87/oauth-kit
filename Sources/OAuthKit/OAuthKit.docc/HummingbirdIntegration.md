@@ -73,8 +73,6 @@ func buildApplication(configuration: ApplicationConfiguration) async throws -> s
         server: .http1(),
         configuration: configuration
     )
-    
-    application.addServices(oauthFactory, sessionStorage)
     return application
 }
 ```
@@ -94,7 +92,7 @@ func configureOAuthRoutes(
 ) async throws {
     
     // OAuth initialization routes
-    router.get("auth/{provider}") { request, context async throws -> Response in
+    router.get("auth/:provider") { request, context async throws -> Response in
         guard let providerName = context.parameters.get("provider") else {
             throw HTTPError(.badRequest, reason: "Provider parameter required")
         }
@@ -118,7 +116,7 @@ func configureOAuthRoutes(
     }
     
     // OAuth callback handling
-    router.get("auth/{provider}/callback") { request, context async throws -> Response in
+    router.get("auth/:provider/callback") { request, context async throws -> Response in
         guard let providerName = context.parameters.get("provider") else {
             throw HTTPError(.badRequest, reason: "Provider parameter required")
         }
@@ -126,13 +124,13 @@ func configureOAuthRoutes(
         let queryParams = request.uri.queryParameters
         
         // Verify state parameter
-        guard let receivedState = queryParams["state"]?.first,
+        guard let receivedState = queryParams.get("state"),
               let storedState: String = context.sessions.getSession("oauth_state"),
               receivedState == storedState else {
             throw HTTPError(.badRequest, reason: "Invalid state parameter")
         }
         
-        guard let code = queryParams["code"]?.first else {
+        guard let code = queryParams.get("code") else {
             throw HTTPError(.badRequest, reason: "Authorization code required")
         }
         
@@ -249,30 +247,33 @@ func createOAuthProvider(
     factory: OAuthClientFactory
 ) async throws -> any OAuth2Provider {
     switch name.lowercased() {
+        
+    let env = Environment().merging(with: .dotEnv("../env"))    
+    
     case "google":
         return try await factory.googleProvider(
-            clientID: Environment.get("GOOGLE_CLIENT_ID")!,
-            clientSecret: Environment.get("GOOGLE_CLIENT_SECRET")!,
-            redirectURI: Environment.get("GOOGLE_REDIRECT_URI")!
+            clientID: env.get("GOOGLE_CLIENT_ID")!,
+            clientSecret: env.get("GOOGLE_CLIENT_SECRET")!,
+            redirectURI: env.get("GOOGLE_REDIRECT_URI")!
         )
     case "microsoft":
         return try await factory.microsoftProvider(
-            clientID: Environment.get("MICROSOFT_CLIENT_ID")!,
-            clientSecret: Environment.get("MICROSOFT_CLIENT_SECRET")!,
-            redirectURI: Environment.get("MICROSOFT_REDIRECT_URI")!,
+            clientID: env.get("MICROSOFT_CLIENT_ID")!,
+            clientSecret: env.get("MICROSOFT_CLIENT_SECRET")!,
+            redirectURI: env.get("MICROSOFT_REDIRECT_URI")!,
             tenantID: .common
         )
     case "github":
         return try await factory.githubProvider(
-            clientID: Environment.get("GITHUB_CLIENT_ID")!,
-            clientSecret: Environment.get("GITHUB_CLIENT_SECRET")!,
-            redirectURI: Environment.get("GITHUB_REDIRECT_URI")!
+            clientID: env.get("GITHUB_CLIENT_ID")!,
+            clientSecret: env.get("GITHUB_CLIENT_SECRET")!,
+            redirectURI: env.get("GITHUB_REDIRECT_URI")!
         )
     case "discord":
         return try await factory.discordProvider(
-            clientID: Environment.get("DISCORD_CLIENT_ID")!,
-            clientSecret: Environment.get("DISCORD_CLIENT_SECRET")!,
-            redirectURI: Environment.get("DISCORD_REDIRECT_URI")!
+            clientID: env.get("DISCORD_CLIENT_ID")!,
+            clientSecret: env.get("DISCORD_CLIENT_SECRET")!,
+            redirectURI: env.get("DISCORD_REDIRECT_URI")!
         )
     default:
         throw HTTPError(.badRequest, reason: "Unsupported provider: \(name)")
