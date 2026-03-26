@@ -12,7 +12,11 @@ let package = Package(
         .library(
             name: "OAuthKit",
             targets: ["OAuthKit"]
-        )
+        ),
+        .library(
+            name: "SharedSignalKit",
+            targets: ["SharedSignalKit"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.33.1"),
@@ -20,6 +24,7 @@ let package = Package(
         .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.4"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.97.1"),
+        .package(url: "https://github.com/swift-extras/swift-extras-base64.git", from: "1.0.0"),
         .package(url: "https://github.com/vapor/jwt-kit.git", from: "5.4.0"),
     ],
     targets: [
@@ -36,10 +41,27 @@ let package = Package(
                 .product(name: "NIOFoundationCompat", package: "swift-nio"),
             ]
         ),
+        .target(
+            name: "SharedSignalKit",
+            dependencies: [
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "ExtrasBase64", package: "swift-extras-base64"),
+                .product(name: "JWTKit", package: "jwt-kit"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOFoundationCompat", package: "swift-nio"),
+            ]
+        ),
         .testTarget(
             name: "OAuthKitTests",
             dependencies: [
                 "OAuthKit"
+            ]
+        ),
+        .testTarget(
+            name: "SharedSignalKitTests",
+            dependencies: [
+                "SharedSignalKit"
             ]
         ),
     ]
