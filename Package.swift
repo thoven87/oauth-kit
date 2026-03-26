@@ -15,9 +15,11 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.30.0"),
-        .package(url: "https://github.com/vapor/jwt-kit.git", from: "5.3.0"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.33.1"),
+        .package(url: "https://github.com/vapor/jwt-kit.git", from: "5.4.0"),
+        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.4"),
+        .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -25,7 +27,9 @@ let package = Package(
             dependencies: [
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "JWTKit", package: "jwt-kit"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
         .testTarget(

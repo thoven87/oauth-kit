@@ -108,16 +108,11 @@ public struct KeyCloakOAuthProvider: Sendable {
         redirectURI: String
     ) async throws -> OpenIDConnectClient {
 
-        // Fetch OpenID configuration from KeyCloak discovery endpoint
-        let config = try await fetchOpenIDConfiguration()
-
-        return try await OpenIDConnectClient(
-            httpClient: oauthKit.httpClient,
+        try await oauthKit.openIDConnectClient(
+            discoveryURL: endpoints.openIDConfiguration,
             clientID: clientID,
             clientSecret: clientSecret,
-            configuration: config,
-            redirectURI: redirectURI,
-            logger: oauthKit.logger
+            redirectURI: redirectURI
         )
     }
 
@@ -224,49 +219,6 @@ public struct KeyCloakOAuthProvider: Sendable {
         return url
     }
 
-    /// Fetch OpenID Connect configuration from KeyCloak
-    /// - Returns: OpenID Connect configuration
-    private func fetchOpenIDConfiguration() async throws -> OpenIDConfiguration {
-        var request = HTTPClientRequest(url: endpoints.openIDConfiguration)
-        request.method = .GET
-        request.headers.add(name: "User-Agent", value: USER_AGENT)
-
-        let response = try await oauthKit.httpClient.execute(request, timeout: .seconds(60))
-
-        guard response.status == .ok else {
-            throw OAuth2Error.serverError("Failed to fetch OpenID configuration: HTTP \(response.status.code)")
-        }
-
-        let body = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-
-        // Parse the OpenID configuration
-        let json = try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any] ?? [:]
-
-        guard let authEndpoint = json["authorization_endpoint"] as? String,
-            let tokenEndpoint = json["token_endpoint"] as? String,
-            let userinfoEndpoint = json["userinfo_endpoint"] as? String,
-            let jwksUri = json["jwks_uri"] as? String,
-            let issuer = json["issuer"] as? String
-        else {
-            throw OAuth2Error.invalidResponse("Missing required fields in OpenID configuration")
-        }
-
-        return OpenIDConfiguration(
-            authorizationEndpoint: authEndpoint,
-            tokenEndpoint: tokenEndpoint,
-            userinfoEndpoint: userinfoEndpoint,
-            jwksUri: jwksUri,
-            scopesSupported: json["scopes_supported"] as? [String] ?? ["openid", "profile", "email"],
-            responseTypesSupported: json["response_types_supported"] as? [String] ?? ["code"],
-            grantTypesSupported: json["grant_types_supported"] as? [String] ?? ["authorization_code", "refresh_token"],
-            subjectTypesSupported: json["subject_types_supported"] as? [String] ?? ["public"],
-            idTokenSigningAlgValuesSupported: json["id_token_signing_alg_values_supported"] as? [String] ?? ["RS256"],
-            issuer: issuer,
-            endSessionEndpoint: json["end_session_endpoint"] as? String,
-            introspectionEndpoint: json["introspection_endpoint"] as? String,
-            revocationEndpoint: json["revocation_endpoint"] as? String
-        )
-    }
 }
 
 /// KeyCloak user profile information
