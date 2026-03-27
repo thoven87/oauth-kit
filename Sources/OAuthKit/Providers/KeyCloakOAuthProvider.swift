@@ -128,6 +128,7 @@ public struct KeyCloakOAuthProvider: Sendable {
     ///   - loginHint: Optional email/username hint for pre-filling the login form
     ///   - locale: Optional locale for the KeyCloak UI (e.g., "en")
     ///   - prompt: Optional prompt behavior (login, none, consent)
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
     ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and PKCE code verifier (if used)
     public func generateAuthorizationURL(

@@ -53,10 +53,10 @@ public struct GitHubOAuthProvider: Sendable {
 
     /// Generate an authorization URL for GitHub login
     /// - Parameters:
-    ///   - client: The OAuth2 client configured for GitHub
     ///   - state: An opaque value to maintain state between the request and callback
     ///   - usePKCE: Whether to use PKCE (GitHub now supports PKCE as of 2023)
     ///   - additionalParameters: Additional parameters to include in the authorization URL
+    ///   - scopes: The requested OAuth scopes (defaults to `["read:user", "user:email"]`)
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func signInURL(
         state: String? = nil,
@@ -88,6 +88,7 @@ public struct GitHubOAuthProvider: Sendable {
     /// - Parameters:
     ///   - code: The authorization code received from GitHub
     ///   - codeVerifier: The PKCE code verifier used when generating the authorization URL
+    ///   - additionalParameters: Additional parameters to include in the token request
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
