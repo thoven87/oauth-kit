@@ -94,7 +94,7 @@ public struct OpenIDConnectClient: Sendable {
     ///   - codeChallenge: PKCE code challenge (if using PKCE)
     ///   - codeChallengeMethod: PKCE code challenge method (e.g., "S256")
     ///   - additionalParameters: Additional query parameters to include in the URL
-    ///   - scope: The requested scopes
+    ///   - scopes: The requested scopes
     /// - Returns: The authorization URL
     /// - Throws: OAuth2Error if the authorization endpoint is not configured
     public func generateAuthorizationURL(

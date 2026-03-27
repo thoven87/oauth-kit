@@ -322,7 +322,6 @@ public struct OAuthClientFactory: Sendable, Service {
     ///   - clientID: The client ID from GitHub
     ///   - clientSecret: The client secret from GitHub
     ///   - redirectURI: The redirect URI registered with GitHub
-    ///   - scope: The requested scopes (space-separated)
     /// - Returns: A GitHub OAuth provider
     public func githubProvider(
         clientID: String,
@@ -465,6 +464,13 @@ public struct OAuthClientFactory: Sendable, Service {
     }
 
     /// Create an Apple OAuth provider for Sign in with Apple
+    /// - Parameters:
+    ///   - clientID: The client/service ID from Apple Developer portal
+    ///   - teamID: The Team ID from Apple Developer portal
+    ///   - keyID: The Key ID for the Sign in with Apple private key
+    ///   - privateKey: The private key content in PEM format
+    ///   - clientSecret: The client secret
+    ///   - redirectURI: The redirect URI registered with Apple
     /// - Returns: An Apple OAuth provider
     public func appleProvider(
         clientID: String,
@@ -542,7 +548,6 @@ public struct OAuthClientFactory: Sendable, Service {
     ///   - clientID: The client ID from Okta
     ///   - clientSecret: The client secret from Okta
     ///   - redirectURI: The redirect URI registered with Okta
-    ///   - scopes: The requested scopes
     ///   - useCustomAuth: Whether to use the custom authorization server (default: false)
     ///   - authServerId: The authorization server ID for custom auth server (default: "default")
     /// - Returns: An Okta OAuth provider
@@ -563,7 +568,10 @@ public struct OAuthClientFactory: Sendable, Service {
                 clientID: clientID,
                 clientSecret: clientSecret,
                 redirectURI: redirectURI
-            )
+            ),
+            domain: domain,
+            useCustomAuth: useCustomAuth,
+            authServerId: authServerId
         )
     }
 
@@ -574,7 +582,6 @@ public struct OAuthClientFactory: Sendable, Service {
     ///   - clientID: The client ID from Cognito (App client ID)
     ///   - clientSecret: The client secret from Cognito (optional, as not all app clients have secrets)
     ///   - redirectURI: The redirect URI registered with Cognito
-    ///   - scopes: The requested scopes (space-separated)
     ///   - domain: Optional custom domain for your Cognito user pool (if you've set one up)
     /// - Returns: An AWS Cognito OAuth provider
     public func awsCognitoProvider(
@@ -598,10 +605,15 @@ public struct OAuthClientFactory: Sendable, Service {
             redirectURI: redirectURI
         )
 
-        return AWSCognitoOAuthProvider(oauthKit: self, openIDConnectClient: client)
+        return AWSCognitoOAuthProvider(oauthKit: self, openIDConnectClient: client, region: region, userPoolID: userPoolID, domain: domain)
     }
 
     /// Create a KeyCloak OAuth provider for Sign in with KeyCloak
+    /// - Parameters:
+    ///   - endpoints: The KeyCloak endpoint configuration (token, authorization, etc.)
+    ///   - clientID: The client ID from KeyCloak
+    ///   - clientSecret: The client secret from KeyCloak
+    ///   - redirectURI: The redirect URI registered with KeyCloak
     /// - Returns: A KeyCloak OAuth provider
     public func keycloakProvider(
         endpoints: KeyCloakOAuthProvider.Endpoints,
