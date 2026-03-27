@@ -15,6 +15,8 @@
 import AsyncHTTPClient
 import Foundation
 import Logging
+import ServiceLifecycle
+import Synchronization
 
 /// The main entry point for OAuthKit functionality.
 ///
@@ -79,35 +81,62 @@ import Logging
 ///
 /// `OAuthClientFactory` is `Sendable` and thread-safe. You can safely share instances
 /// across multiple tasks and actors.
-public struct OAuthClientFactory: Sendable {
+public struct OAuthClientFactory: Sendable, Service {
     /// The HTTP client used for making requests
     internal let httpClient: HTTPClient
 
     /// Logger used for OAuth operations
     public let logger: Logger
 
+    /// Shared key manager for JWKS key rotation across all endpoints.
+    internal let keyManager: JWKSKeyManager
+
+    /// Background service that periodically refreshes JWKS keys.
+    internal let jwksRefreshService: JWKSRefreshService
+
     /// Create a new OAuthKit instance with optional custom configuration.
     ///
     /// - Parameters:
     ///   - httpClient: The HTTP client used for making OAuth requests. Defaults to `HTTPClient.shared`.
     ///   - logger: Logger used for OAuth operations and debugging. Defaults to a logger labeled "com.oauthkit.OAuthKit".
+    ///   - jwksRefreshConfiguration: Configuration for automatic JWKS refresh. Defaults to standard settings.
     ///
     /// ## Example
     ///
     /// ```swift
-    /// // Use default configuration
+    /// // Use default configuration with JWKS refresh
     /// let oauthKit = OAuthClientFactory()
     ///
     /// // Custom configuration
     /// let customLogger = Logger(label: "my-app.oauth")
+    /// let refreshConfig = JWKSRefreshService.Configuration(refreshInterval: .seconds(900))
     /// let oauthKit = OAuthClientFactory(
     ///     httpClient: HTTPClient.shared,
-    ///     logger: customLogger
+    ///     logger: customLogger,
+    ///     jwksRefreshConfiguration: refreshConfig
     /// )
     /// ```
-    public init(httpClient: HTTPClient = HTTPClient.shared, logger: Logger = Logger(label: "com.oauthkit.OAuthKit")) {
+    public init(
+        httpClient: HTTPClient = HTTPClient.shared,
+        logger: Logger = Logger(label: "com.oauthkit.OAuthKit"),
+        jwksRefreshConfiguration: JWKSRefreshService.Configuration = JWKSRefreshService.Configuration()
+    ) {
         self.httpClient = httpClient
         self.logger = logger
+
+        let manager = JWKSKeyManager(
+            logger: Logger(label: "com.oauthkit.JWKSKeyManager")
+        )
+
+        let refreshService = JWKSRefreshService(
+            httpClient: httpClient,
+            keyManager: manager,
+            configuration: jwksRefreshConfiguration,
+            logger: Logger(label: "com.oauthkit.JWKSRefreshService")
+        )
+
+        self.keyManager = manager
+        self.jwksRefreshService = refreshService
     }
 
     /// Creates a generic OAuth2 client for custom or unsupported providers.
@@ -185,14 +214,28 @@ public struct OAuthClientFactory: Sendable {
         let discovery = OpenIDDiscoveryService(httpClient: httpClient, logger: logger)
         let configuration = try await discovery.discover(url: discoveryURL)
 
-        return try await OpenIDConnectClient(
+        let client = OpenIDConnectClient(
             httpClient: self.httpClient,
             clientID: clientID,
             clientSecret: clientSecret,
             configuration: configuration,
             redirectURI: redirectURI,
+            keyManager: self.keyManager,
             logger: self.logger
         )
+
+        // Register the JWKS endpoint with the refresh service
+        jwksRefreshService.registerEndpoint(
+            jwksUri: configuration.jwksUri,
+            issuer: configuration.issuer
+        )
+
+        return client
+    }
+
+    /// Service lifecycle: Run the JWKS refresh service
+    public func run() async throws {
+        try await jwksRefreshService.run()
     }
 
     /// Creates a Google OAuth provider for Google Sign-In and Service Account authentication.
