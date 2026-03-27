@@ -51,6 +51,7 @@ public struct SlackOAuthProvider {
     /// - Parameters:
     ///   - state: An opaque value to maintain state between the request and callback
     ///   - usePKCE: Whether to use PKCE (supported by Slack)
+    ///   - scopes: The requested OAuth scopes
     ///   - userScope: Additional user scopes for Slack user tokens
     ///   - additionalParameters: Additional parameters to include in the authorization URL
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
@@ -237,10 +238,11 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
         self.logger = logger
     }
 
-    /// Exchange an authorization code for tokens with GitHub
+    /// Exchange an authorization code for tokens with Slack
     /// - Parameters:
     ///   - code: The authorization code received from Slack
     ///   - codeVerifier: The PKCE code verifier used when generating the authorization URL
+    ///   - additionalParameters: Additional parameters to include in the token request
     /// - Returns: The token response
     public func exchangeCode(
         code: String,

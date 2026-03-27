@@ -63,7 +63,6 @@ extension OAuth2ClientProtocol {
     ///   - tokenEndpoint: The OAuth2 token endpoint
     ///   - authorizationEndpoint:The OAuth2 authorization endpoint
     ///   - redirectURI: The redirect URI registered with the OAuth2 provider
-    ///   - scopes: The requested scopes
     ///   - logger: Logger used for OAuth2Client operations
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
@@ -188,7 +187,9 @@ extension OAuth2ClientProtocol {
     }
 
     /// Request a token using client credentials grant
-    /// - Parameter additionalParameters: Additional parameters to include in the token request
+    /// - Parameters:
+    ///   - additionalParameters: Additional parameters to include in the token request
+    ///   - scopes: The requested OAuth scopes
     /// - Returns: The token response
     /// - Throws: OAuth2Error if the token request fails
     public func clientCredentials(
