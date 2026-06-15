@@ -188,7 +188,7 @@ public struct GitHubOAuthProvider: Sendable {
             }
 
             let responseBody = try await response.body.collect(upTo: expectedBytes)
-            return try JSONDecoder().decode(T.self, from: responseBody)
+            return try JSON.decode(T.self, from: responseBody)
         } catch let error as OAuth2Error {
             throw error
         } catch {

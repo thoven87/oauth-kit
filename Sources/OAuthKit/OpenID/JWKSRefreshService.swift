@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import AsyncAlgorithms
 import AsyncHTTPClient
 import Foundation
 import JWTKit
@@ -24,15 +23,23 @@ import Synchronization
 /// Background service that periodically refreshes JWKS (JSON Web Key Sets)
 /// from registered OpenID Connect provider endpoints.
 ///
-/// The service fetches fresh key sets on a configurable interval and feeds them
-/// into a shared ``JWKSKeyManager``, which performs in-place key rotation using
-/// jwt-kit's `removeAll(except:)` / `add(jwks:)` primitives.  This means every
-/// ``OpenIDConnectClient`` that shares the same key manager will immediately
-/// see rotated keys without any manual cache invalidation.
+/// The service fetches fresh key sets and feeds them into a shared ``JWKSKeyManager``,
+/// which performs in-place key rotation using jwt-kit's `removeAll(except:)` / `add(jwks:)`
+/// primitives. Every ``OpenIDConnectClient`` that shares the same key manager will
+/// immediately see rotated keys without any manual cache invalidation.
+///
+/// ## Refresh scheduling
+///
+/// Each endpoint is refreshed according to the `Cache-Control: max-age` value returned
+/// by the JWKS server. The configured `refreshInterval` acts as a **ceiling**: if the
+/// server advertises a TTL longer than `refreshInterval`, the configured value is used
+/// instead. If the server returns no cache headers, `refreshInterval` is used as the
+/// default. This means the service wakes up dynamically — one endpoint might refresh
+/// every 15 minutes while another refreshes every 24 hours.
 ///
 /// ## Lifecycle
 ///
-/// `JWKSRefreshService` conforms to `ServiceLifecycle.Service`.  Add it (or the
+/// `JWKSRefreshService` conforms to `ServiceLifecycle.Service`. Add it (or the
 /// ``OAuthClientFactory`` that owns it) to a `ServiceGroup` so that it runs
 /// until a graceful-shutdown signal is received:
 ///
@@ -52,7 +59,11 @@ public final class JWKSRefreshService: Service {
 
     /// Tuning knobs for the refresh loop.
     public struct Configuration: Sendable {
-        /// How often to re-fetch every registered JWKS endpoint.
+        /// Maximum interval between refreshes for any single endpoint.
+        ///
+        /// If a JWKS server returns `Cache-Control: max-age=N`, the effective TTL
+        /// is `min(N seconds, refreshInterval)`. When no cache header is present,
+        /// this value is used directly.
         public let refreshInterval: Duration
 
         /// Per-request HTTP timeout.
@@ -79,17 +90,18 @@ public final class JWKSRefreshService: Service {
 
     // MARK: - Endpoint registry
 
-    /// Lightweight value that identifies a JWKS endpoint to poll.
-    private struct JWKSEndpoint: Sendable, Hashable {
+    /// Lightweight value that identifies a JWKS endpoint and tracks when it is next due.
+    private struct JWKSEndpoint: Sendable {
         let jwksUri: String
         let issuer: String
+        /// The earliest time at which this endpoint should next be fetched.
+        /// Initialised to `.now` so the first run picks up all endpoints immediately.
+        var nextRefreshAt: ContinuousClock.Instant
 
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(jwksUri)
-        }
-
-        static func == (lhs: JWKSEndpoint, rhs: JWKSEndpoint) -> Bool {
-            lhs.jwksUri == rhs.jwksUri
+        init(jwksUri: String, issuer: String) {
+            self.jwksUri = jwksUri
+            self.issuer = issuer
+            self.nextRefreshAt = ContinuousClock().now
         }
     }
 
@@ -100,8 +112,9 @@ public final class JWKSRefreshService: Service {
     private let configuration: Configuration
     private let logger: Logger
 
-    /// Thread-safe set of endpoints to refresh on each cycle.
-    private let registeredEndpoints: Mutex<Set<JWKSEndpoint>> = Mutex([])
+    /// Thread-safe dictionary of endpoints keyed by JWKS URI.
+    /// Using a dictionary (rather than a Set) allows mutating `nextRefreshAt` in place.
+    private let registeredEndpoints: Mutex<[String: JWKSEndpoint]> = Mutex([:])
 
     // MARK: - Init
 
@@ -128,12 +141,15 @@ public final class JWKSRefreshService: Service {
 
     /// Register a JWKS endpoint for periodic refresh.
     ///
+    /// If the endpoint is already registered, this is a no-op.
+    ///
     /// - Parameters:
     ///   - jwksUri: The JWKS document URL.
     ///   - issuer: The issuer identifier (used only for logging).
     public func registerEndpoint(jwksUri: String, issuer: String) {
         registeredEndpoints.withLock { endpoints in
-            _ = endpoints.insert(JWKSEndpoint(jwksUri: jwksUri, issuer: issuer))
+            guard endpoints[jwksUri] == nil else { return }
+            endpoints[jwksUri] = JWKSEndpoint(jwksUri: jwksUri, issuer: issuer)
         }
         logger.info(
             "Registered JWKS endpoint",
@@ -145,12 +161,13 @@ public final class JWKSRefreshService: Service {
     }
 
     /// Register multiple endpoints discovered from OpenID configurations.
+    ///
+    /// Already-registered endpoints are left untouched.
     public func registerEndpoints(from configurations: [OpenIDConfiguration]) {
         registeredEndpoints.withLock { endpoints in
             for config in configurations {
-                endpoints.insert(
-                    JWKSEndpoint(jwksUri: config.jwksUri, issuer: config.issuer)
-                )
+                guard endpoints[config.jwksUri] == nil else { continue }
+                endpoints[config.jwksUri] = JWKSEndpoint(jwksUri: config.jwksUri, issuer: config.issuer)
             }
         }
         logger.info(
@@ -164,7 +181,7 @@ public final class JWKSRefreshService: Service {
     /// - Parameter jwksUri: The JWKS document URL to unregister.
     public func unregisterEndpoint(jwksUri: String) {
         registeredEndpoints.withLock { endpoints in
-            endpoints = endpoints.filter { $0.jwksUri != jwksUri }
+            _ = endpoints.removeValue(forKey: jwksUri)
         }
         logger.info(
             "Unregistered JWKS endpoint",
@@ -177,87 +194,119 @@ public final class JWKSRefreshService: Service {
     /// Entry point called by `ServiceGroup`.
     ///
     /// Performs an initial refresh of every registered endpoint, then enters a
-    /// timer loop that re-fetches on `configuration.refreshInterval` until
-    /// graceful shutdown is triggered.
+    /// dynamic sleep loop. The service wakes at the earliest `nextRefreshAt`
+    /// across all endpoints (capped at `configuration.refreshInterval`) and
+    /// refreshes only the endpoints that are actually due. Graceful shutdown is
+    /// handled by task cancellation, which causes `Task.sleep` to throw
+    /// `CancellationError` and unwind the loop.
     public func run() async throws {
         logger.info(
             "Starting JWKS refresh service",
-            metadata: ["interval": .stringConvertible(configuration.refreshInterval)]
+            metadata: ["maxInterval": .stringConvertible(configuration.refreshInterval)]
         )
 
-        await refreshAllEndpoints()
+        await refreshDueEndpoints()
 
-        let timer = AsyncTimerSequence(
-            interval: configuration.refreshInterval,
-            clock: ContinuousClock()
-        ).cancelOnGracefulShutdown()
-
-        for try await _ in timer {
-            await refreshAllEndpoints()
+        while true {
+            try await Task.sleep(until: nextWakeupInstant(), clock: ContinuousClock())
+            await refreshDueEndpoints()
         }
-
-        logger.info("JWKS refresh service stopped")
     }
 
     // MARK: - Manual refresh
 
-    /// Force an immediate refresh of every registered endpoint.
+    /// Force an immediate refresh of every registered endpoint, ignoring their
+    /// current `nextRefreshAt` values.
     ///
     /// - Returns: The number of endpoints that were successfully refreshed.
     @discardableResult
     public func forceRefreshAll() async -> Int {
         logger.info("Forcing refresh of all JWKS endpoints")
-        return await refreshAllEndpoints()
+        // Reset every endpoint so none is skipped by the due-time filter.
+        let now = ContinuousClock().now
+        registeredEndpoints.withLock { endpoints in
+            for key in endpoints.keys {
+                endpoints[key]?.nextRefreshAt = now
+            }
+        }
+        return await refreshDueEndpoints()
     }
 
     // MARK: - Internal refresh logic
 
-    /// Refresh all currently-registered endpoints concurrently.
+    /// The `ContinuousClock.Instant` at which the service should next wake.
+    ///
+    /// Returns the earliest `nextRefreshAt` across all registered endpoints,
+    /// capped at `now + configuration.refreshInterval` so no endpoint can defer
+    /// a refresh indefinitely.
+    private func nextWakeupInstant() -> ContinuousClock.Instant {
+        let now = ContinuousClock().now
+        let cap = now + configuration.refreshInterval
+        let earliest = registeredEndpoints.withLock { endpoints in
+            endpoints.values.map(\.nextRefreshAt).min()
+        }
+        return min(earliest ?? cap, cap)
+    }
+
+    /// Refresh every endpoint whose `nextRefreshAt` is at or before now, concurrently.
     ///
     /// - Returns: The number of endpoints that were successfully refreshed.
     @discardableResult
-    private func refreshAllEndpoints() async -> Int {
-        let endpoints = registeredEndpoints.withLock { Array($0) }
-        guard !endpoints.isEmpty else { return 0 }
+    private func refreshDueEndpoints() async -> Int {
+        let now = ContinuousClock().now
+        let due = registeredEndpoints.withLock { endpoints in
+            endpoints.values.filter { $0.nextRefreshAt <= now }
+        }
+        guard !due.isEmpty else { return 0 }
 
         var successCount = 0
-
         await withTaskGroup(of: Bool.self) { group in
-            for endpoint in endpoints {
-                group.addTask {
-                    await self.refreshEndpoint(endpoint)
-                }
+            for endpoint in due {
+                group.addTask { await self.refreshEndpoint(endpoint) }
             }
             for await succeeded in group where succeeded {
                 successCount += 1
             }
         }
 
-        if successCount > 0 || endpoints.count > 0 {
-            logger.debug(
-                "JWKS refresh cycle complete",
-                metadata: [
-                    "refreshed": .stringConvertible(successCount),
-                    "total": .stringConvertible(endpoints.count),
-                ]
-            )
-        }
+        logger.debug(
+            "JWKS refresh cycle complete",
+            metadata: [
+                "refreshed": .stringConvertible(successCount),
+                "due": .stringConvertible(due.count),
+                "total": .stringConvertible(registeredEndpoints.withLock { $0.count }),
+            ]
+        )
 
         return successCount
     }
 
-    /// Fetch and update keys for a single endpoint.
+    /// Fetch and update keys for a single endpoint, then schedule its next refresh
+    /// based on the server's `Cache-Control: max-age` (capped at `refreshInterval`).
     ///
     /// - Returns: `true` if the refresh succeeded.
     private func refreshEndpoint(_ endpoint: JWKSEndpoint) async -> Bool {
         do {
-            let jwks = try await fetchJWKS(from: endpoint.jwksUri)
+            let (jwks, maxAge) = try await fetchJWKS(from: endpoint.jwksUri)
             try await keyManager.updateKeys(from: jwks, for: endpoint.jwksUri)
+
+            // Honour the server's advertised TTL, but never exceed the configured ceiling.
+            let ttl =
+                maxAge.map { min($0, configuration.refreshInterval) }
+                ?? configuration.refreshInterval
+            let nextRefresh = ContinuousClock().now + ttl
+
+            registeredEndpoints.withLock { endpoints in
+                endpoints[endpoint.jwksUri]?.nextRefreshAt = nextRefresh
+            }
+
             logger.debug(
                 "Refreshed JWKS",
                 metadata: [
                     "jwksUri": .string(endpoint.jwksUri),
                     "issuer": .string(endpoint.issuer),
+                    "ttl": .stringConvertible(ttl),
+                    "cacheSource": .string(maxAge != nil ? "Cache-Control" : "default"),
                 ]
             )
             return true
@@ -277,7 +326,10 @@ public final class JWKSRefreshService: Service {
     // MARK: - HTTP fetch with retries
 
     /// Download a JWKS document, retrying on transient failures.
-    private func fetchJWKS(from jwksUri: String) async throws -> JWKS {
+    ///
+    /// - Returns: The decoded `JWKS` and the `max-age` parsed from `Cache-Control`,
+    ///   or `nil` if the header is absent or contains no valid `max-age` directive.
+    private func fetchJWKS(from jwksUri: String) async throws -> (jwks: JWKS, maxAge: Duration?) {
         var lastError: Error?
 
         for attempt in 1...configuration.maxRetries {
@@ -310,8 +362,10 @@ public final class JWKSRefreshService: Service {
                     continue
                 }
 
+                let maxAge = parseCacheMaxAge(from: response.headers)
                 let body = try await response.body.collect(upTo: 1024 * 1024)
-                return try JSONDecoder().decode(JWKS.self, from: body)
+                let jwks = try JSON.decode(JWKS.self, from: body)
+                return (jwks, maxAge)
 
             } catch let error as OAuth2Error {
                 if attempt == configuration.maxRetries { throw error }
@@ -342,11 +396,27 @@ public final class JWKSRefreshService: Service {
             }
         }
 
-        // Unreachable in practice — the loop always throws on the last attempt.
         throw OAuth2Error.jwksError(
             "JWKS request failed after \(configuration.maxRetries) attempts: "
                 + String(describing: lastError)
         )
+    }
+
+    /// Parse `Cache-Control: max-age=N` from response headers.
+    ///
+    /// Returns `nil` if the header is absent or contains no valid positive `max-age` directive.
+    private func parseCacheMaxAge(from headers: HTTPHeaders) -> Duration? {
+        guard let cacheControl = headers.first(name: "Cache-Control") else { return nil }
+        for directive in cacheControl.split(separator: ",") {
+            let trimmed = directive.trimmingCharacters(in: .whitespaces).lowercased()
+            if trimmed.hasPrefix("max-age=") {
+                let valueStr = trimmed.dropFirst("max-age=".count)
+                if let seconds = Int(valueStr), seconds > 0 {
+                    return .seconds(seconds)
+                }
+            }
+        }
+        return nil
     }
 }
 

@@ -164,7 +164,7 @@ public struct OpenIDConnectClient: Sendable {
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-            return try JSONDecoder().decode(T.self, from: responseBody)
+            return try JSON.decode(T.self, from: responseBody)
         } catch let error as OAuth2Error {
             throw error
         } catch {
