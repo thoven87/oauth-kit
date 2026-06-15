@@ -81,7 +81,7 @@ struct JWKSKeyManagerTests {
 
         try await manager.updateKeys(from: jwks, for: Self.testJWKSUri)
 
-        let hasKeys = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeys == true)
     }
 
@@ -89,7 +89,7 @@ struct JWKSKeyManagerTests {
     func hasKeysReturnsFalseForUnknown() async throws {
         let manager = createKeyManager()
 
-        let hasKeys = await manager.hasKeys(for: "https://unknown.example.com/jwks")
+        let hasKeys = manager.hasKeys(for: "https://unknown.example.com/jwks")
         #expect(hasKeys == false)
     }
 
@@ -102,7 +102,7 @@ struct JWKSKeyManagerTests {
         try await manager.updateKeys(from: jwks, for: Self.testJWKSUri)
         try await manager.updateKeys(from: jwks2, for: Self.testJWKSUri2)
 
-        let endpoints = await manager.registeredEndpoints()
+        let endpoints = manager.registeredEndpoints()
         #expect(endpoints.count == 2)
         #expect(endpoints.contains(Self.testJWKSUri))
         #expect(endpoints.contains(Self.testJWKSUri2))
@@ -118,7 +118,7 @@ struct JWKSKeyManagerTests {
         let oldJWKS = createMultiKeyJWKS(kids: ["old-key-1", "old-key-2"])
         try await manager.updateKeys(from: oldJWKS, for: Self.testJWKSUri)
 
-        let hasKeysBefore = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeysBefore = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeysBefore == true)
 
         // Rotate to new keys (different kids)
@@ -126,11 +126,11 @@ struct JWKSKeyManagerTests {
         try await manager.updateKeys(from: newJWKS, for: Self.testJWKSUri)
 
         // Endpoint should still have keys
-        let hasKeysAfter = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeysAfter = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeysAfter == true)
 
         // Should still have exactly one endpoint registered
-        let endpoints = await manager.registeredEndpoints()
+        let endpoints = manager.registeredEndpoints()
         #expect(endpoints.count == 1)
     }
 
@@ -145,8 +145,8 @@ struct JWKSKeyManagerTests {
         try await manager.updateKeys(from: jwks2, for: Self.testJWKSUri2)
 
         // Both endpoints should have keys
-        let hasKeys1 = await manager.hasKeys(for: Self.testJWKSUri)
-        let hasKeys2 = await manager.hasKeys(for: Self.testJWKSUri2)
+        let hasKeys1 = manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys2 = manager.hasKeys(for: Self.testJWKSUri2)
         #expect(hasKeys1 == true)
         #expect(hasKeys2 == true)
 
@@ -154,7 +154,7 @@ struct JWKSKeyManagerTests {
         let newJWKS1 = createTestJWKSWithKid("endpoint1-rotated-key")
         try await manager.updateKeys(from: newJWKS1, for: Self.testJWKSUri)
 
-        let stillHasKeys2 = await manager.hasKeys(for: Self.testJWKSUri2)
+        let stillHasKeys2 = manager.hasKeys(for: Self.testJWKSUri2)
         #expect(stillHasKeys2 == true)
     }
 
@@ -166,15 +166,15 @@ struct JWKSKeyManagerTests {
         let jwks = createTestJWKS()
 
         try await manager.updateKeys(from: jwks, for: Self.testJWKSUri)
-        let hasKeysBefore = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeysBefore = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeysBefore == true)
 
-        await manager.removeKeys(for: Self.testJWKSUri)
+        manager.removeKeys(for: Self.testJWKSUri)
 
-        let hasKeysAfter = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeysAfter = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeysAfter == false)
 
-        let endpoints = await manager.registeredEndpoints()
+        let endpoints = manager.registeredEndpoints()
         #expect(endpoints.isEmpty)
     }
 
@@ -189,10 +189,10 @@ struct JWKSKeyManagerTests {
         try await manager.updateKeys(from: jwks2, for: Self.testJWKSUri2)
 
         // Remove only the first endpoint
-        await manager.removeKeys(for: Self.testJWKSUri)
+        manager.removeKeys(for: Self.testJWKSUri)
 
-        let hasKeys1 = await manager.hasKeys(for: Self.testJWKSUri)
-        let hasKeys2 = await manager.hasKeys(for: Self.testJWKSUri2)
+        let hasKeys1 = manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys2 = manager.hasKeys(for: Self.testJWKSUri2)
         #expect(hasKeys1 == false)
         #expect(hasKeys2 == true)
     }
@@ -205,9 +205,9 @@ struct JWKSKeyManagerTests {
         try await manager.updateKeys(from: jwks, for: Self.testJWKSUri)
 
         // Removing a non-registered endpoint should not affect anything
-        await manager.removeKeys(for: "https://nonexistent.example.com/jwks")
+        manager.removeKeys(for: "https://nonexistent.example.com/jwks")
 
-        let hasKeys = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeys == true)
     }
 
@@ -229,7 +229,7 @@ struct JWKSKeyManagerTests {
             }
         }
 
-        let endpoints = await manager.registeredEndpoints()
+        let endpoints = manager.registeredEndpoints()
         #expect(endpoints.count == 10)
     }
 
@@ -243,14 +243,14 @@ struct JWKSKeyManagerTests {
             // Concurrent reads
             for _ in 0..<10 {
                 group.addTask {
-                    _ = await manager.hasKeys(for: Self.testJWKSUri)
+                    _ = manager.hasKeys(for: Self.testJWKSUri)
                 }
             }
 
             // Concurrent endpoint listing
             for _ in 0..<5 {
                 group.addTask {
-                    _ = await manager.registeredEndpoints()
+                    _ = manager.registeredEndpoints()
                 }
             }
 
@@ -262,7 +262,7 @@ struct JWKSKeyManagerTests {
         }
 
         // Both endpoints should still be valid
-        let hasKeys1 = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys1 = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeys1 == true)
     }
 
@@ -276,7 +276,7 @@ struct JWKSKeyManagerTests {
         // Empty JWKS has no keys with kid values, so hasKeys should be false
         try await manager.updateKeys(from: emptyJWKS, for: Self.testJWKSUri)
 
-        let hasKeys = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeys == false)
     }
 
@@ -290,11 +290,11 @@ struct JWKSKeyManagerTests {
             try await manager.updateKeys(from: jwks, for: Self.testJWKSUri)
         }
 
-        let hasKeys = await manager.hasKeys(for: Self.testJWKSUri)
+        let hasKeys = manager.hasKeys(for: Self.testJWKSUri)
         #expect(hasKeys == true)
 
         // Only one endpoint should be registered
-        let endpoints = await manager.registeredEndpoints()
+        let endpoints = manager.registeredEndpoints()
         #expect(endpoints.count == 1)
     }
 }

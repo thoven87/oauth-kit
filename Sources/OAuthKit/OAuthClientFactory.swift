@@ -16,7 +16,6 @@ import AsyncHTTPClient
 import Foundation
 import Logging
 import ServiceLifecycle
-import Synchronization
 
 /// The main entry point for OAuthKit functionality.
 ///

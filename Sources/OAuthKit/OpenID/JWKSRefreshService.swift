@@ -24,9 +24,9 @@ import Synchronization
 /// from registered OpenID Connect provider endpoints.
 ///
 /// The service fetches fresh key sets and feeds them into a shared ``JWKSKeyManager``,
-/// which performs in-place key rotation using jwt-kit's `removeAll(except:)` / `add(jwks:)`
-/// primitives. Every ``OpenIDConnectClient`` that shares the same key manager will
-/// immediately see rotated keys without any manual cache invalidation.
+/// which maintains an isolated ``JWTKeyCollection`` per endpoint. Every
+/// ``OpenIDConnectClient`` that shares the same key manager will immediately see
+/// rotated keys without any manual cache invalidation.
 ///
 /// ## Refresh scheduling
 ///

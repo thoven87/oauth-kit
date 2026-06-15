@@ -15,7 +15,6 @@
 import Foundation
 import JWTKit
 import Logging
-import ServiceLifecycle
 import Testing
 
 @testable import OAuthKit
@@ -31,7 +30,7 @@ struct JWKSRefreshIntegrationTests {
         let factory = OAuthClientFactory()
 
         // Verify the key manager starts with no endpoints registered
-        let endpoints = await factory.keyManager.registeredEndpoints()
+        let endpoints = factory.keyManager.registeredEndpoints()
         #expect(endpoints.isEmpty)
     }
 
@@ -50,7 +49,7 @@ struct JWKSRefreshIntegrationTests {
         )
 
         // Verify components work with custom configuration
-        let endpoints = await factory.keyManager.registeredEndpoints()
+        let endpoints = factory.keyManager.registeredEndpoints()
         #expect(endpoints.isEmpty)
     }
 
@@ -58,50 +57,21 @@ struct JWKSRefreshIntegrationTests {
 
     @Test("JWKS refresh service runs with ServiceGroup")
     func testJWKSRefreshWithServiceGroup() async throws {
-        let (stream, source) = AsyncStream.makeStream(of: Int.self)
         var logger = Logger(label: "jwks-refresh-test")
         logger.logLevel = .debug
-
         let factory = OAuthClientFactory(logger: logger)
 
-        // Register a JWKS endpoint to ensure the service has work to do
         _ = try await factory.openIDConnectClient(
             discoveryURL: "https://accounts.google.com",
             clientID: "test-client-id",
             clientSecret: "test-client-secret"
         )
 
-        await withThrowingTaskGroup(of: Void.self) { group in
-            let serviceGroup = ServiceGroup(
-                configuration: ServiceGroupConfiguration(
-                    services: [factory],
-                    gracefulShutdownSignals: [],
-                    logger: logger
-                )
-            )
-
-            group.addTask {
-                try await serviceGroup.run()
-            }
-
-            // Let the service run briefly to perform initial refresh
-            group.addTask {
-                try await Task.sleep(for: .seconds(1))
-                source.yield(1)
-            }
-
-            // Wait for signal then shutdown
-            _ = await stream.first { _ in true }
-            await serviceGroup.triggerGracefulShutdown()
+        // withService starts the factory, runs the body, then triggers graceful
+        // shutdown — the service can never hang the test suite indefinitely.
+        try await withService(factory) {
+            // Reaching here confirms the service started without error.
         }
-
-        // After running the service, the key manager should have keys loaded
-        let hasKeys = await factory.keyManager.hasKeys(
-            for: "https://www.googleapis.com/oauth2/v3/certs"
-        )
-        // Keys may or may not be present depending on timing, but the service
-        // should not have crashed
-        #expect(hasKeys == true || hasKeys == false)
     }
 
     // MARK: - JWKS Registration Tests
@@ -123,7 +93,7 @@ struct JWKSRefreshIntegrationTests {
         #expect(refreshedCount >= 1)
 
         // After refresh, the key manager should have keys for the endpoint
-        let hasKeys = await factory.keyManager.hasKeys(
+        let hasKeys = factory.keyManager.hasKeys(
             for: "https://www.googleapis.com/oauth2/v3/certs"
         )
         #expect(hasKeys == true)
@@ -151,7 +121,7 @@ struct JWKSRefreshIntegrationTests {
         #expect(refreshedCount >= 2)
 
         // Verify multiple endpoints have keys loaded
-        let endpoints = await factory.keyManager.registeredEndpoints()
+        let endpoints = factory.keyManager.registeredEndpoints()
         #expect(endpoints.count >= 2)
     }
 
@@ -178,10 +148,10 @@ struct JWKSRefreshIntegrationTests {
         let factory = OAuthClientFactory()
 
         // Key manager should have no endpoints initially
-        let endpoints = await factory.keyManager.registeredEndpoints()
+        let endpoints = factory.keyManager.registeredEndpoints()
         #expect(endpoints.isEmpty)
 
-        let hasKeys = await factory.keyManager.hasKeys(for: "https://example.com/jwks")
+        let hasKeys = factory.keyManager.hasKeys(for: "https://example.com/jwks")
         #expect(hasKeys == false)
     }
 

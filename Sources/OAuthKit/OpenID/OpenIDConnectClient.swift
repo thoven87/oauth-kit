@@ -314,11 +314,16 @@ public struct OpenIDConnectClient: Sendable {
     /// - Throws: OAuth2Error if validation fails
     public func validateIDToken(_ idToken: String) async throws -> IDTokenClaims {
         do {
-            // Verify the JWT signature and decode the claims using the shared
-            // key collection.  The key manager's collection is kept up-to-date
-            // by the background JWKSRefreshService, so rotated keys are
-            // automatically available here.
-            let jwt = try await keyManager.keys.verify(idToken, as: IDTokenClaims.self)
+            // Look up the key collection for this specific endpoint. Keys are
+            // isolated per issuer, so there is no risk of cross-provider kid
+            // collisions. The collection is kept up-to-date by the background
+            // JWKSRefreshService.
+            guard let keyCollection = keyManager.keys(for: configuration.jwksUri) else {
+                throw OAuth2Error.jwksError(
+                    "No JWKS keys loaded for \(configuration.issuer). Ensure the OAuthClientFactory service is running."
+                )
+            }
+            let jwt = try await keyCollection.verify(idToken, as: IDTokenClaims.self)
 
             // Validate audience — ensure the token is intended for this client.
             // This check is client-specific and not handled by JWT-Kit.
