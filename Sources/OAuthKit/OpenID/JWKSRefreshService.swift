@@ -13,9 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import AsyncHTTPClient
-import Foundation
 import JWTKit
 import Logging
+import NIOCore
 import NIOHTTP1
 import ServiceLifecycle
 import Synchronization
@@ -341,7 +341,7 @@ public final class JWKSRefreshService: Service {
 
                 let response = try await httpClient.execute(
                     request,
-                    timeout: .seconds(Int64(configuration.requestTimeout.timeInterval))
+                    timeout: configuration.requestTimeout.timeAmount
                 )
 
                 guard response.status == .ok else {
@@ -423,10 +423,14 @@ public final class JWKSRefreshService: Service {
 // MARK: - Duration helpers
 
 extension Duration {
-    /// Convenience conversion to `Foundation.TimeInterval`.
-    var timeInterval: TimeInterval {
-        let (seconds, attoseconds) = self.components
-        return TimeInterval(seconds)
-            + TimeInterval(attoseconds) / 1_000_000_000_000_000_000
+    /// Convert to a NIO `TimeAmount` with nanosecond precision.
+    ///
+    /// `Duration.components` exposes `(seconds: Int64, attoseconds: Int64)` directly,
+    /// so no floating-point arithmetic is needed. Attoseconds are divided by 10^9 to
+    /// obtain nanoseconds; the sub-nanosecond remainder is dropped (negligible for
+    /// HTTP timeouts).
+    var timeAmount: TimeAmount {
+        let (seconds, attoseconds) = components
+        return .nanoseconds(seconds * 1_000_000_000 + attoseconds / 1_000_000_000)
     }
 }

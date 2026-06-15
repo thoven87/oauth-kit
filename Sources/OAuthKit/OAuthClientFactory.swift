@@ -237,6 +237,18 @@ public struct OAuthClientFactory: Sendable, Service {
         try await jwksRefreshService.run()
     }
 
+    /// Immediately refresh every registered JWKS endpoint, bypassing the normal
+    /// cache-driven schedule.
+    ///
+    /// Useful when a JWT arrives with an unknown `kid` — call this to pull the
+    /// latest keys before retrying verification.
+    ///
+    /// - Returns: The number of endpoints that were successfully refreshed.
+    @discardableResult
+    public func forceRefreshAll() async -> Int {
+        await jwksRefreshService.forceRefreshAll()
+    }
+
     /// Creates a Google OAuth provider for Google Sign-In and Service Account authentication.
     ///
     /// Google's OAuth provider supports both user authentication via OpenID Connect and
