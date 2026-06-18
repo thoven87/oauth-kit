@@ -63,7 +63,6 @@ extension OAuth2ClientProtocol {
     ///   - tokenEndpoint: The OAuth2 token endpoint
     ///   - authorizationEndpoint:The OAuth2 authorization endpoint
     ///   - redirectURI: The redirect URI registered with the OAuth2 provider
-    ///   - scopes: The requested scopes
     ///   - logger: Logger used for OAuth2Client operations
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
@@ -188,7 +187,9 @@ extension OAuth2ClientProtocol {
     }
 
     /// Request a token using client credentials grant
-    /// - Parameter additionalParameters: Additional parameters to include in the token request
+    /// - Parameters:
+    ///   - additionalParameters: Additional parameters to include in the token request
+    ///   - scopes: The requested OAuth scopes
     /// - Returns: The token response
     /// - Throws: OAuth2Error if the token request fails
     public func clientCredentials(
@@ -468,7 +469,7 @@ extension OAuth2ClientProtocol {
                 }
 
                 let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
-                return try JSONDecoder().decode(JWKS.self, from: jwks)
+                return try JSON.decode(JWKS.self, from: jwks)
             } catch let error as OAuth2Error {
                 if attempt == maxRetries {
                     throw error
@@ -644,7 +645,7 @@ extension OAuth2ClientProtocol {
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-            return try JSONDecoder().decode(TokenResponse.self, from: responseBody)
+            return try JSON.decode(TokenResponse.self, from: responseBody)
 
         } catch let error as OAuth2Error {
             throw error
@@ -735,7 +736,7 @@ extension OAuth2ClientProtocol {
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-            return try JSONDecoder().decode(TokenIntrospectionResponse.self, from: responseBody)
+            return try JSON.decode(TokenIntrospectionResponse.self, from: responseBody)
 
         } catch let error as OAuth2Error {
             throw error
@@ -827,9 +828,7 @@ extension OAuth2ClientProtocol {
                 logger.error("Token revocation failed with status: \(response.status), body: \(responseString)")
 
                 // Try to parse error response
-                if let data = responseString.data(using: .utf8),
-                    let errorResponse = try? JSONDecoder().decode(TokenRevocationResponse.self, from: data)
-                {
+                if let errorResponse = try? JSON.decode(TokenRevocationResponse.self, from: responseBody) {
                     return errorResponse
                 }
 

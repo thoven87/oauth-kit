@@ -188,14 +188,11 @@ public struct DropboxOAuthProvider: Sendable {
             includeHasExplicitSharedMembers: includeHasExplicitSharedMembers
         )
 
-        let body = try JSONEncoder().encode(requestBody)
-        let buffer = ByteBuffer(data: Data(body))
-
         return try await callDropboxAPI(
             accessToken: accessToken,
             endpoint: "/files/list_folder",
             httpMethod: .POST,
-            body: buffer
+            body: try JSON.encode(requestBody)
         )
     }
 
@@ -211,14 +208,12 @@ public struct DropboxOAuthProvider: Sendable {
         autorename: Bool = false
     ) async throws -> DropboxFolderMetadata {
         let requestBody = DropboxCreateFolderRequest(path: path, autorename: autorename)
-        let body = try JSONEncoder().encode(requestBody)
-        let buffer = ByteBuffer(data: Data(body))
 
         return try await callDropboxAPI(
             accessToken: accessToken,
             endpoint: "/files/create_folder_v2",
             httpMethod: .POST,
-            body: buffer
+            body: try JSON.encode(requestBody)
         )
     }
 

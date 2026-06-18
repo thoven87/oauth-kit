@@ -25,15 +25,33 @@ public struct AWSCognitoOAuthProvider {
     /// An OpenID Connect client configured for AWS Cognito
     private let client: OpenIDConnectClient
 
+    /// The AWS region where the user pool is located
+    public let region: String
+
+    /// The Cognito User Pool ID
+    public let userPoolID: String
+
+    /// Optional custom domain for the Cognito user pool
+    public let domain: String?
+
     /// Initialize a new AWS Cognito OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
     /// - Parameter openIDConnectClient: The OpenID Connect client configured for AWS Cognito
+    /// - Parameter region: The AWS region where the user pool is located
+    /// - Parameter userPoolID: The Cognito User Pool ID
+    /// - Parameter domain: Optional custom domain for the Cognito user pool
     internal init(
         oauthKit: OAuthClientFactory,
-        openIDConnectClient client: OpenIDConnectClient
+        openIDConnectClient client: OpenIDConnectClient,
+        region: String,
+        userPoolID: String,
+        domain: String? = nil
     ) {
         self.oauthKit = oauthKit
         self.client = client
+        self.region = region
+        self.userPoolID = userPoolID
+        self.domain = domain
     }
 
     /// Build the AWS Cognito OpenID Connect discovery URL
@@ -102,7 +120,8 @@ public struct AWSCognitoOAuthProvider {
         }
 
         // Choose which authorization URL to use
-        if let cognitoDomain = cognitoDomain {
+        let effectiveDomain = cognitoDomain ?? self.domain
+        if let cognitoDomain = effectiveDomain {
             // If a specific Cognito domain is provided, use it (for hosted UI)
             let sanitizedDomain = cognitoDomain.trimmingCharacters(in: .whitespaces).lowercased()
             let baseURL = sanitizedDomain.hasPrefix("https://") ? sanitizedDomain : "https://\(sanitizedDomain)"

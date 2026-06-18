@@ -14,6 +14,8 @@
 
 import Foundation
 import JWTKit
+import Logging
+import ServiceLifecycle
 
 /// Test utilities for creating mock JWKS data
 public struct JWKSTestUtilities {
@@ -46,5 +48,39 @@ public struct JWKSTestUtilities {
     /// Create an invalid JWKS for error testing - uses empty keys array
     public static func createInvalidJWKS() -> JWKS {
         JWKS(keys: [])
+    }
+}
+
+/// Run a `Service` inside a `ServiceGroup` for the duration of a test closure.
+///
+/// Mirrors the `testJobQueue` helper from swift-jobs: the service is started in
+/// a background task, the test body runs, then graceful shutdown is triggered.
+/// This guarantees the service never hangs indefinitely regardless of whether
+/// the test body succeeds or throws.
+///
+/// ```swift
+/// try await withService(factory) {
+///     let count = await factory.jwksRefreshService.forceRefreshAll()
+///     #expect(count >= 1)
+/// }
+/// ```
+func withService<S: Service, Value>(
+    _ service: S,
+    _ test: () async throws -> Value
+) async throws -> Value {
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        let serviceGroup = ServiceGroup(
+            configuration: .init(
+                services: [service],
+                gracefulShutdownSignals: [],
+                logger: Logger(label: "test.ServiceGroup")
+            )
+        )
+        group.addTask {
+            try await serviceGroup.run()
+        }
+        let value = try await test()
+        await serviceGroup.triggerGracefulShutdown()
+        return value
     }
 }

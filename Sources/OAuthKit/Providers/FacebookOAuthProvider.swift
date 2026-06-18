@@ -43,6 +43,7 @@ public struct FacebookOAuthProvider: Sendable {
 
     /// Initialize a new Facebook OAuth provider
     /// - Parameter oauthKit: The OAuthKit instance
+    /// - Parameter client: The OAuth2 client configured for Facebook
     public init(oauthKit: OAuthClientFactory, client: OAuth2Client) {
         self.oauthKit = oauthKit
         self.client = client
@@ -54,6 +55,7 @@ public struct FacebookOAuthProvider: Sendable {
     ///   - usePKCE: Whether to use PKCE (Facebook now supports PKCE)
     ///   - displayMode: The display mode for the Facebook authentication dialog
     ///   - additionalParameters: Additional parameters to include in the authorization URL
+    ///   - scopes: The requested OAuth scopes (defaults to `["email", "public_profile"]`)
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
         state: String? = nil,
@@ -97,6 +99,7 @@ public struct FacebookOAuthProvider: Sendable {
     /// - Parameters:
     ///   - code: The authorization code received from Facebook
     ///   - codeVerifier: The PKCE code verifier used when generating the authorization URL
+    ///   - additionalParameters: Additional parameters to include in the token request
     /// - Returns: The token response
     public func exchangeCode(
         code: String,

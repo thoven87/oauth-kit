@@ -26,11 +26,28 @@ public struct OktaOAuthProvider: Sendable {
     /// An OpenID Connect client configured for Okta
     private let client: OpenIDConnectClient
 
+    /// The Okta domain (e.g. "dev-123456.okta.com")
+    public let domain: String
+
+    /// Whether to use the custom authorization server
+    public let useCustomAuth: Bool
+
+    /// The authorization server ID for custom auth server
+    public let authServerId: String
+
     /// Initialize a new Okta OAuth provider
-    /// - Parameter oauthKit: The OAuthKit instance
-    internal init(oauthKit: OAuthClientFactory, client: OpenIDConnectClient) {
+    /// - Parameters:
+    ///   - oauthKit: The OAuthKit instance
+    ///   - client: The OpenID Connect client
+    ///   - domain: The Okta domain
+    ///   - useCustomAuth: Whether to use the custom authorization server
+    ///   - authServerId: The authorization server ID for custom auth server
+    internal init(oauthKit: OAuthClientFactory, client: OpenIDConnectClient, domain: String, useCustomAuth: Bool, authServerId: String) {
         self.oauthKit = oauthKit
         self.client = client
+        self.domain = domain
+        self.useCustomAuth = useCustomAuth
+        self.authServerId = authServerId
     }
 
     /// Build the Okta OpenID Connect discovery URL
@@ -58,6 +75,7 @@ public struct OktaOAuthProvider: Sendable {
     ///   - prompt: Controls the Okta sign-in prompt behavior
     ///   - idpID: The identity provider ID to bypass the Okta sign-in page and go directly to the specified IdP
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - additionalParameters: Additional parameters to include in the authorization URL
     ///   - scopes: The requested scopes
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func generateAuthorizationURL(
@@ -406,14 +424,14 @@ public struct OktaOAuthProvider: Sendable {
 
     // MARK: - Helper Methods
 
-    /// Extract base URL from OpenID Connect configuration
+    /// Base URL for Okta API calls, derived from the stored domain
     private func extractBaseURL() -> String {
-        let issuer = client.configuration.issuer
-        // Remove /.well-known/openid_configuration or /oauth2/default if present
-        if issuer.contains("/oauth2/") {
-            return String(issuer.prefix(while: { $0 != "/" }) + "://" + issuer.drop(while: { $0 != "/" }).dropFirst().prefix(while: { $0 != "/" }))
+        let sanitizedDomain = domain.trimmingCharacters(in: .whitespaces).lowercased()
+        let base = sanitizedDomain.hasPrefix("https://") ? sanitizedDomain : "https://\(sanitizedDomain)"
+        if useCustomAuth {
+            return "\(base)/oauth2/\(authServerId)"
         }
-        return issuer
+        return base
     }
 
     /// Make authenticated API request to Okta

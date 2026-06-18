@@ -75,10 +75,12 @@ public struct AppleOAuthProvider {
 
     /// Generate an authorization URL for Apple Sign In
     /// - Parameters:
-    ///   - client: The OAuth2 client configured for Apple
     ///   - state: An opaque value to maintain state between the request and callback
     ///   - usePKCE: Whether to use PKCE (recommended and enabled by default)
+    ///   - responseMode: The response mode for the authorization (defaults to `.query`)
+    ///   - responseType: The response types to request (defaults to `[.code]`)
     ///   - additionalParameters: Additional parameters to include in the authorization URL
+    ///   - scopes: The requested scopes (defaults to `["name", "email"]`)
     /// - Returns: A tuple containing the authorization URL and code verifier (for PKCE)
     public func getAuthorizationURL(
         state: String? = nil,
@@ -234,6 +236,16 @@ public struct AppleOAuth2Client: OAuth2ClientProtocol {
 
     /// Initialize a new Apple OAuth2 client
     ///
+    /// - Parameters:
+    ///   - httpClient: The HTTP client for making requests
+    ///   - clientID: The client/service ID from Apple Developer portal
+    ///   - clientSecret: The client secret
+    ///   - teamID: The Team ID from Apple Developer portal
+    ///   - keyID: The Key ID for the Sign in with Apple private key
+    ///   - privateKey: The private key content in PEM format
+    ///   - redirectURI: The redirect URI registered with Apple
+    ///   - jwksURL: The URL for Apple's JSON Web Key Set
+    ///   - logger: Logger for OAuth operations
     public init(
         httpClient: HTTPClient = HTTPClient.shared,
         clientID: String,

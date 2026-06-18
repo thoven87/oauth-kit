@@ -8,8 +8,8 @@ The JWKS Refresh Service provides automatic rotation of public keys used for JWT
 
 ## Key Components
 
-- **JWKSKeyManager**: Actor that wraps a single shared `JWTKeyCollection`, tracking which keys belong to which endpoint and performing in-place rotation via jwt-kit's `removeAll(except:)` / `add(jwks:)` APIs.
-- **JWKSRefreshService**: Background service that periodically fetches fresh JWKS from registered endpoints and feeds them into the key manager.
+- **JWKSKeyManager**: Manages one isolated `JWTKeyCollection` per JWKS endpoint, preventing cross-provider `kid` collisions and enabling atomic per-endpoint key rotation.
+- **JWKSRefreshService**: Background service that periodically fetches fresh JWKS documents, honouring each server's `Cache-Control: max-age` header so endpoints refresh on their own schedule.
 
 ## Quick Start
 
@@ -19,7 +19,7 @@ The JWKS Refresh Service provides automatic rotation of public keys used for JWT
 import OAuthKit
 import ServiceLifecycle
 
-// Create OAuthKit — a shared JWKSKeyManager is created automatically
+// Create OAuthKit — a JWKSKeyManager and refresh service are created automatically
 let oauthKit = OAuthClientFactory()
 
 // Create OAuth providers — their JWKS endpoints are registered for refresh
@@ -35,11 +35,11 @@ try await oauthKit.run()
 
 ### Custom Configuration
 
-You can customize the refresh behavior:
+You can customize the refresh behaviour:
 
 ```swift
 let refreshConfig = JWKSRefreshService.Configuration(
-    refreshInterval: .seconds(900),  // 15 minutes
+    refreshInterval: .seconds(900),  // ceiling — server Cache-Control may be shorter
     requestTimeout: .seconds(45),    // HTTP timeout
     maxRetries: 5,                   // Retry failed requests
     retryDelay: .seconds(2)          // Base delay between retries
@@ -84,7 +84,7 @@ try await serviceGroup.run()
 
 ### Automatic Registration
 
-When you create OpenID Connect clients, their JWKS endpoints are automatically registered with the refresh service:
+When you create OpenID Connect clients or providers, their JWKS endpoints are automatically registered with the refresh service:
 
 ```swift
 let oauthKit = OAuthClientFactory()
@@ -97,55 +97,38 @@ let googleProvider = try await oauthKit.googleProvider(
 )
 ```
 
-### In-Place Key Rotation
+### Per-Endpoint Key Rotation
 
-When the refresh service fetches a new JWKS for an endpoint, the ``JWKSKeyManager`` performs an in-place rotation on the shared `JWTKeyCollection`:
+Each JWKS endpoint gets its own isolated `JWTKeyCollection`. When a fresh JWKS is fetched:
 
-1. **Add** new keys first — existing keys with the same `kid` are overwritten, so both old and new keys briefly coexist.
-2. **Remove** stale keys that are no longer present in the updated JWKS, while preserving keys from other endpoints.
+1. A new `JWTKeyCollection` is built from the fetched keys entirely before any shared state is touched.
+2. The new collection atomically replaces the previous one for that endpoint in a single lock-protected assignment.
 
-Because every ``OpenIDConnectClient`` shares the same underlying `JWTKeyCollection` (via `keyManager.keys`), rotated keys are immediately available for token verification everywhere — no cache invalidation or expiry logic required.
+Because each endpoint is isolated, two providers that happen to publish the same `kid` value can never overwrite each other's keys.
+
+### Cache-Driven Scheduling
+
+After each successful fetch the service reads the server's `Cache-Control: max-age` response header and uses that value as the next refresh interval, capped at the configured `refreshInterval`. When no cache header is present, `refreshInterval` is used directly.
+
+This means different endpoints may refresh on very different schedules — a provider advertising `max-age=86400` (24 h) won't be fetched unnecessarily every 30 minutes.
 
 ### JWT Validation
 
-Token verification is a single call into the shared key collection:
+Token verification goes through the ``OpenIDConnectClient``, which looks up the correct key collection for its issuer automatically:
 
 ```swift
-let claims = try await keyManager.keys.verify(idToken, as: IDTokenClaims.self)
+let claims = try await oidcClient.validateIDToken(idToken)
 ```
 
 ## Manual Operations
 
 ### Force Refresh
 
-Manually refresh all registered endpoints:
+Manually refresh all registered endpoints — useful when a JWT arrives with an unknown `kid`:
 
 ```swift
-let refreshedCount = await oauthKit.jwksRefreshService.forceRefreshAll()
+let refreshedCount = await oauthKit.forceRefreshAll()
 print("Refreshed \(refreshedCount) JWKS endpoints")
-```
-
-### Register Additional Endpoints
-
-Register custom JWKS endpoints not covered by built-in providers:
-
-```swift
-oauthKit.jwksRefreshService.registerEndpoint(
-    jwksUri: "https://custom-provider.com/.well-known/jwks.json",
-    issuer: "https://custom-provider.com"
-)
-```
-
-### Query Key Manager State
-
-```swift
-// Check if keys are loaded for an endpoint
-let hasKeys = await oauthKit.keyManager.hasKeys(
-    for: "https://accounts.google.com/oauth2/v3/certs"
-)
-
-// List all endpoints with loaded keys
-let endpoints = await oauthKit.keyManager.registeredEndpoints()
 ```
 
 ## Configuration Options
@@ -154,7 +137,7 @@ let endpoints = await oauthKit.keyManager.registeredEndpoints()
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `refreshInterval` | 30 minutes | How often to re-fetch every registered JWKS endpoint |
+| `refreshInterval` | 30 minutes | Maximum interval between refreshes. Shortened automatically when the server returns a smaller `Cache-Control: max-age`. |
 | `requestTimeout` | 30 seconds | HTTP timeout for JWKS requests |
 | `maxRetries` | 3 | Maximum retry attempts for failed requests |
 | `retryDelay` | 1 second | Base delay between retry attempts (multiplied by attempt number) |
@@ -174,12 +157,12 @@ The service includes robust error handling:
 1. **Use ServiceLifecycle**: Ensure proper startup/shutdown handling
 2. **Monitor logs**: Watch for JWKS refresh failures
 3. **Configure alerts**: Set up monitoring for service health
-4. **Tune intervals**: Adjust refresh intervals based on provider key rotation frequency
+4. **Tune intervals**: Adjust `refreshInterval` as a ceiling; most providers will drive shorter cycles via `Cache-Control`
 
 ### Development
 
-1. **Shorter intervals**: Use faster refresh for testing key rotation
-2. **Force refresh**: Manually trigger refresh during testing
+1. **Shorter intervals**: Use a smaller `refreshInterval` for testing key rotation
+2. **Force refresh**: Call `forceRefreshAll()` to trigger an immediate refresh during testing
 3. **Debug logging**: Enable verbose logging for troubleshooting
 
 ### Security
