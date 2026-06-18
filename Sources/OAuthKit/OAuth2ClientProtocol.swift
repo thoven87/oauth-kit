@@ -469,7 +469,7 @@ extension OAuth2ClientProtocol {
                 }
 
                 let jwks = try await response.body.collect(upTo: 1024 * 1024)  // 1MB
-                return try JSONDecoder().decode(JWKS.self, from: jwks)
+                return try JSON.decode(JWKS.self, from: jwks)
             } catch let error as OAuth2Error {
                 if attempt == maxRetries {
                     throw error
@@ -645,7 +645,7 @@ extension OAuth2ClientProtocol {
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-            return try JSONDecoder().decode(TokenResponse.self, from: responseBody)
+            return try JSON.decode(TokenResponse.self, from: responseBody)
 
         } catch let error as OAuth2Error {
             throw error
@@ -736,7 +736,7 @@ extension OAuth2ClientProtocol {
             }
 
             let responseBody = try await response.body.collect(upTo: 1024 * 1024)  // 1MB limit
-            return try JSONDecoder().decode(TokenIntrospectionResponse.self, from: responseBody)
+            return try JSON.decode(TokenIntrospectionResponse.self, from: responseBody)
 
         } catch let error as OAuth2Error {
             throw error
@@ -828,9 +828,7 @@ extension OAuth2ClientProtocol {
                 logger.error("Token revocation failed with status: \(response.status), body: \(responseString)")
 
                 // Try to parse error response
-                if let data = responseString.data(using: .utf8),
-                    let errorResponse = try? JSONDecoder().decode(TokenRevocationResponse.self, from: data)
-                {
+                if let errorResponse = try? JSON.decode(TokenRevocationResponse.self, from: responseBody) {
                     return errorResponse
                 }
 
