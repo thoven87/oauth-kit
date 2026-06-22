@@ -98,13 +98,14 @@ extension OAuth2ClientProtocol {
         codeChallenge: String?,
         codeChallengeMethod: OAuthCodeChallengeMethod? = .s256,
         additionalParameters: [String: String],
-        scopes: [String]
+        scopes: [String],
+        redirectURIOverride: String? = nil
     ) throws -> URL {
         guard let authorizationEndpoint = authorizationEndpoint else {
             throw OAuth2Error.configurationError("Authorization endpoint is required but not configured")
         }
 
-        guard let redirectURI = redirectURI else {
+        guard let redirectURI = redirectURIOverride ?? redirectURI else {
             throw OAuth2Error.configurationError("Redirect URI is required for authorization flow but not configured")
         }
 
@@ -160,9 +161,10 @@ extension OAuth2ClientProtocol {
     public func getToken(
         code: String,
         codeVerifier: String?,
-        additionalParameters: [String: String]
+        additionalParameters: [String: String],
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
-        guard let redirectURI = redirectURI else {
+        guard let redirectURI = redirectURIOverride ?? redirectURI else {
             throw OAuth2Error.configurationError("Redirect URI is required for authorization code exchange but not configured")
         }
 
@@ -701,7 +703,7 @@ extension OAuth2ClientProtocol {
     /// - Throws: OAuth2Error if the request fails
     internal func requestTokenIntrospection(parameters: [String: String]) async throws -> TokenIntrospectionResponse {
         // Use conventional introspection endpoint pattern
-        let baseURL = tokenEndpoint.replacingOccurrences(of: "/token", with: "")
+        let baseURL = tokenEndpoint.replacing("/token", with: "")
         let introspectionEndpoint = "\(baseURL)/introspect"
 
         guard let url = URL(string: introspectionEndpoint) else {
@@ -792,7 +794,7 @@ extension OAuth2ClientProtocol {
     /// - Throws: OAuth2Error if the request fails
     internal func requestTokenRevocation(parameters: [String: String]) async throws -> TokenRevocationResponse {
         // Use conventional revocation endpoint pattern
-        let baseURL = tokenEndpoint.replacingOccurrences(of: "/token", with: "")
+        let baseURL = tokenEndpoint.replacing("/token", with: "")
         let revocationEndpoint = "\(baseURL)/revoke"
 
         guard let url = URL(string: revocationEndpoint) else {

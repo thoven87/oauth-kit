@@ -193,12 +193,14 @@ public final class JWKSRefreshService: Service {
 
     /// Entry point called by `ServiceGroup`.
     ///
-    /// Performs an initial refresh of every registered endpoint, then enters a
-    /// dynamic sleep loop. The service wakes at the earliest `nextRefreshAt`
-    /// across all endpoints (capped at `configuration.refreshInterval`) and
-    /// refreshes only the endpoints that are actually due. Graceful shutdown is
-    /// handled by task cancellation, which causes `Task.sleep` to throw
-    /// `CancellationError` and unwind the loop.
+    /// Performs an initial refresh, then loops with dynamic sleep until
+    /// graceful shutdown.
+    ///
+    /// `cancelWhenGracefulShutdown(_:)` from ServiceLifecycle runs the loop in
+    /// a child task and cancels it the moment graceful shutdown is triggered,
+    /// so `Task.sleep` throws `CancellationError` immediately rather than
+    /// waiting for the full sleep interval to expire. The loop condition
+    /// `!Task.isShuttingDownGracefully` provides an additional clean exit path.
     public func run() async throws {
         logger.info(
             "Starting JWKS refresh service",
@@ -207,10 +209,14 @@ public final class JWKSRefreshService: Service {
 
         await refreshDueEndpoints()
 
-        while true {
-            try await Task.sleep(until: nextWakeupInstant(), clock: ContinuousClock())
-            await refreshDueEndpoints()
+        try await cancelWhenGracefulShutdown {
+            while !Task.isCancelled && !Task.isShuttingDownGracefully {
+                try await Task.sleep(until: self.nextWakeupInstant(), clock: ContinuousClock())
+                await self.refreshDueEndpoints()
+            }
         }
+
+        logger.info("JWKS refresh service stopped")
     }
 
     // MARK: - Manual refresh
