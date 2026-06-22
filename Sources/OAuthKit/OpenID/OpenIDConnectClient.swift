@@ -123,12 +123,14 @@ public struct OpenIDConnectClient: Sendable {
     public func exchangeCode(
         code: String,
         codeVerifier: String? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        redirectURIOverride: String? = nil
     ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
         let tokenResponse = try await oauth2Client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            redirectURIOverride: redirectURIOverride
         )
 
         // Verify and decode the ID token

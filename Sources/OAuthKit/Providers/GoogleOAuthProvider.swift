@@ -66,7 +66,8 @@ public struct GoogleOAuthProvider: Sendable {
         accessType: TokenAccessType = .offline,
         includeGrantedScopes: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [String]
+        scopes: [String],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams = additionalParameters
         var codeVerifier: String? = nil
@@ -102,7 +103,8 @@ public struct GoogleOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -147,11 +149,13 @@ public struct GoogleOAuthProvider: Sendable {
     /// - Returns: The token response and ID token claims
     public func exchangeCode(
         code: String,
-        codeVerifier: String?
+        codeVerifier: String?,
+        redirectURIOverride: String? = nil
     ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
         try await client.exchangeCode(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            redirectURIOverride: redirectURIOverride
         )
     }
 
