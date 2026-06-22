@@ -84,7 +84,8 @@ public struct OktaOAuthProvider: Sendable {
         idpID: String? = nil,
         usePKCE: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        scopes: [String] = ["openid", "profile", "email", "offline_access"],
+        redirectURIOverride: String? = nil
     ) async throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -113,7 +114,8 @@ public struct OktaOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -126,11 +128,13 @@ public struct OktaOAuthProvider: Sendable {
     /// - Returns: A tuple containing the token response and ID token claims
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        redirectURIOverride: String? = nil
     ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
         try await client.exchangeCode(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

@@ -88,7 +88,8 @@ public struct AppleOAuthProvider {
         responseMode: ResponseMode = .query,
         responseType: [ResponseType] = [.code],
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["name", "email"]
+        scopes: [String] = ["name", "email"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
 
         var codeVerifier: String? = nil
@@ -114,7 +115,8 @@ public struct AppleOAuthProvider {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: params,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -127,7 +129,8 @@ public struct AppleOAuthProvider {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
 
         let parameters = [
@@ -137,7 +140,8 @@ public struct AppleOAuthProvider {
         return try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: parameters
+            additionalParameters: parameters,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

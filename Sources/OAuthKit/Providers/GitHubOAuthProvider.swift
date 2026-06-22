@@ -62,7 +62,8 @@ public struct GitHubOAuthProvider: Sendable {
         state: String? = nil,
         usePKCE: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["read:user", "user:email"]
+        scopes: [String] = ["read:user", "user:email"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -78,7 +79,8 @@ public struct GitHubOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParameters,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -93,12 +95,14 @@ public struct GitHubOAuthProvider: Sendable {
     public func exchangeCode(
         code: String,
         codeVerifier: String? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

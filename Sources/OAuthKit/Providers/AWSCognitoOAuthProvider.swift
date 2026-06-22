@@ -89,7 +89,8 @@ public struct AWSCognitoOAuthProvider {
         usePKCE: Bool = true,
         cognitoDomain: String? = nil,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        scopes: [String] = ["openid", "profile", "email", "offline_access"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
 
         var codeVerifier: String? = nil
@@ -133,7 +134,7 @@ public struct AWSCognitoOAuthProvider {
             var queryItems = [
                 URLQueryItem(name: "client_id", value: client.clientID),
                 URLQueryItem(name: "response_type", value: "code"),
-                URLQueryItem(name: "redirect_uri", value: client.redirectURI),
+                URLQueryItem(name: "redirect_uri", value: redirectURIOverride ?? client.redirectURI),
             ]
 
             // Optional parameters
@@ -168,7 +169,8 @@ public struct AWSCognitoOAuthProvider {
                 state: state,
                 codeChallenge: codeChallenge,
                 additionalParameters: additionalParams,
-                scopes: scopes
+                scopes: scopes,
+                redirectURIOverride: redirectURIOverride
             )
 
             return (url, codeVerifier)
@@ -182,11 +184,13 @@ public struct AWSCognitoOAuthProvider {
     /// - Returns: A tuple containing the token response and ID token claims
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        redirectURIOverride: String? = nil
     ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims) {
         try await client.exchangeCode(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

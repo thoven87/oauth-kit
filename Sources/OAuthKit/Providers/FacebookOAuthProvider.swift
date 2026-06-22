@@ -62,7 +62,8 @@ public struct FacebookOAuthProvider: Sendable {
         usePKCE: Bool = true,
         displayMode: FacebookDisplayMode? = nil,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["email", "public_profile"]
+        scopes: [String] = ["email", "public_profile"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -89,7 +90,8 @@ public struct FacebookOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: params,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -104,12 +106,14 @@ public struct FacebookOAuthProvider: Sendable {
     public func exchangeCode(
         code: String,
         codeVerifier: String? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

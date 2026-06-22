@@ -69,7 +69,8 @@ public struct DropboxOAuthProvider: Sendable {
         forceReauthentication: Bool = false,
         usePKCE: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [DropboxScope] = []
+        scopes: [DropboxScope] = [],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams = additionalParameters
         var codeVerifier: String? = nil
@@ -113,7 +114,8 @@ public struct DropboxOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: []  // Scopes handled above in additionalParams
+            scopes: [],  // Scopes handled above in additionalParams
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -126,12 +128,14 @@ public struct DropboxOAuthProvider: Sendable {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String?
+        codeVerifier: String?,
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: [:]
+            additionalParameters: [:],
+            redirectURIOverride: redirectURIOverride
         )
     }
 
