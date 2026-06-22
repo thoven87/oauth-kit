@@ -56,7 +56,8 @@ public struct LinkedInOAuthProvider: Sendable {
         state: String? = nil,
         usePKCE: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["openid", "profile", "email"]
+        scopes: [String] = ["openid", "profile", "email"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         let additionalParams = additionalParameters
         var codeVerifier: String? = nil
@@ -73,7 +74,8 @@ public struct LinkedInOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -86,12 +88,14 @@ public struct LinkedInOAuthProvider: Sendable {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String?
+        codeVerifier: String?,
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: [:]
+            additionalParameters: [:],
+            redirectURIOverride: redirectURIOverride
         )
     }
 

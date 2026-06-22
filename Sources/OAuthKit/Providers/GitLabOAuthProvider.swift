@@ -82,7 +82,8 @@ public struct GitLabOAuthProvider: Sendable {
         state: String? = nil,
         usePKCE: Bool = true,
         additionalParameters: [String: String] = [:],
-        scopes: [GitLabScope] = [.readUser]
+        scopes: [GitLabScope] = [.readUser],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         let additionalParams = additionalParameters
         var codeVerifier: String? = nil
@@ -99,7 +100,8 @@ public struct GitLabOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes.map { $0.rawValue }
+            scopes: scopes.map { $0.rawValue },
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -112,12 +114,14 @@ public struct GitLabOAuthProvider: Sendable {
     /// - Returns: The token response
     public func exchangeCode(
         code: String,
-        codeVerifier: String?
+        codeVerifier: String?,
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         try await client.getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: [:]
+            additionalParameters: [:],
+            redirectURIOverride: redirectURIOverride
         )
     }
 

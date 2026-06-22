@@ -60,7 +60,8 @@ public struct SlackOAuthProvider {
         usePKCE: Bool = true,
         scopes: [String] = [],
         userScope: [String]? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var codeVerifier: String? = nil
         var codeChallenge: String? = nil
@@ -84,7 +85,8 @@ public struct SlackOAuthProvider {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
@@ -97,11 +99,13 @@ public struct SlackOAuthProvider {
     /// - Returns: The Slack token response with additional Slack-specific data
     public func exchangeCode(
         code: String,
-        codeVerifier: String? = nil
+        codeVerifier: String? = nil,
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {  // we should be returning SlackTokenResponse
         let tokenResponse = try await client.exchangeCode(
             code: code,
-            codeVerifier: codeVerifier
+            codeVerifier: codeVerifier,
+            redirectURIOverride: redirectURIOverride
         )
 
         return tokenResponse
@@ -247,14 +251,16 @@ public struct SlackOAuth2Client: OAuth2ClientProtocol {
     public func exchangeCode(
         code: String,
         codeVerifier: String? = nil,
-        additionalParameters: [String: String] = [:]
+        additionalParameters: [String: String] = [:],
+        redirectURIOverride: String? = nil
     ) async throws -> TokenResponse {
         // TODO: make getToken return a generic type
         // So that a SlackTokenResponse is returned here instead
         try await getToken(
             code: code,
             codeVerifier: codeVerifier,
-            additionalParameters: additionalParameters
+            additionalParameters: additionalParameters,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

@@ -102,14 +102,16 @@ public struct OpenIDConnectClient: Sendable {
         codeChallenge: String? = nil,
         codeChallengeMethod: OAuthCodeChallengeMethod? = nil,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["openid", "profile", "email", "offline_access"]
+        scopes: [String] = ["openid", "profile", "email", "offline_access"],
+        redirectURIOverride: String? = nil
     ) throws -> URL {
         try oauth2Client.generateAuthorizationURL(
             state: state,
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
             additionalParameters: additionalParameters,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
     }
 

@@ -133,7 +133,8 @@ public struct KeyCloakOAuthProvider: Sendable {
         locale: String? = nil,
         prompt: Prompt? = nil,
         additionalParameters: [String: String] = [:],
-        scopes: [String] = ["openid", "profile", "email"]
+        scopes: [String] = ["openid", "profile", "email"],
+        redirectURIOverride: String? = nil
     ) throws -> (url: URL, codeVerifier: String?) {
         var additionalParams: [String: String] = [:]
 
@@ -164,7 +165,8 @@ public struct KeyCloakOAuthProvider: Sendable {
             state: state,
             codeChallenge: codeChallenge,
             additionalParameters: additionalParams,
-            scopes: scopes
+            scopes: scopes,
+            redirectURIOverride: redirectURIOverride
         )
 
         return (url, codeVerifier)
