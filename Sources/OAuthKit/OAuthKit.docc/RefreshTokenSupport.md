@@ -56,13 +56,11 @@ These providers use the `OAuth2Client` and return only token response (no ID tok
 
 ### Special Cases
 
-| Provider | Current Method | Ideal Method | Notes |
-|----------|----------------|--------------|-------|
-| **Apple** | Custom implementation | `provider.refreshAccessToken(refreshToken:)` | Uses JWT-based authentication |
+| Provider | Notes |
+|----------|-------|
+| **Apple** | Uses JWT-based client authentication; refresh follows the same `provider.refreshAccessToken(refreshToken:)` API. |
 
-## Current Implementation Examples
-
-**Note**: These examples show the current inconsistent API. In an ideal world, all providers would have `refreshAccessToken()` directly on the provider.
+## Implementation Examples
 
 ### Google (OpenID Connect)
 
@@ -93,7 +91,7 @@ let provider = try await oauthFactory.microsoftProvider(
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
     redirectURI: "your-redirect-uri",
-    tenantID: .common
+    tenantKind: .common
 )
 
 // Request tokens with offline access
@@ -109,7 +107,7 @@ let (newTokens, claims) = try await provider.refreshAccessToken(refreshToken: st
 ### Discord (OAuth2)
 
 ```swift
-let provider = try await oauthFactory.discordProvider(
+let provider = oauthFactory.discordProvider(
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
     redirectURI: "your-redirect-uri"
@@ -122,7 +120,7 @@ let (newTokens, _) = try await provider.refreshAccessToken(refreshToken: storedR
 ### GitHub (OAuth2)
 
 ```swift
-let provider = try await oauthFactory.githubProvider(
+let provider = oauthFactory.githubProvider(
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
     redirectURI: "your-redirect-uri"
@@ -138,121 +136,125 @@ let userProfile = try await provider.getUserProfile(accessToken: newTokens.acces
 
 ## Generic Refresh Implementation
 
-For applications that support multiple providers, you can create a generic refresh function that handles the current API inconsistency:
+For applications that support multiple providers, you can create a generic refresh function:
 
 ```swift
+// Convenience accessor — replace with your config/DI approach in production.
+private func env(_ key: String) -> String {
+    guard let v = ProcessInfo.processInfo.environment[key], !v.isEmpty else {
+        fatalError("Missing required environment variable: \(key)")
+    }
+    return v
+}
+
 func refreshTokenForProvider(
     _ providerName: String,
     refreshToken: String,
     oauthFactory: OAuthClientFactory
 ) async throws -> (tokenResponse: TokenResponse, claims: IDTokenClaims?) {
-    
     switch providerName.lowercased() {
-    // OpenID Connect Providers with custom refresh methods
     case "google":
         let provider = try await oauthFactory.googleProvider(
-            clientID: Environment.get("GOOGLE_CLIENT_ID")!,
-            clientSecret: Environment.get("GOOGLE_CLIENT_SECRET")!,
-            redirectURI: Environment.get("GOOGLE_REDIRECT_URI")!
+            clientID: env("GOOGLE_CLIENT_ID"),
+            clientSecret: env("GOOGLE_CLIENT_SECRET"),
+            redirectURI: env("GOOGLE_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
-    // OpenID Connect Providers using client.refreshToken
+
     case "microsoft":
         let provider = try await oauthFactory.microsoftProvider(
-            clientID: Environment.get("MICROSOFT_CLIENT_ID")!,
-            clientSecret: Environment.get("MICROSOFT_CLIENT_SECRET")!,
-            redirectURI: Environment.get("MICROSOFT_REDIRECT_URI")!,
-            tenantID: .common
+            clientID: env("MICROSOFT_CLIENT_ID"),
+            clientSecret: env("MICROSOFT_CLIENT_SECRET"),
+            redirectURI: env("MICROSOFT_REDIRECT_URI"),
+            tenantKind: .common
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "auth0":
         let provider = try await oauthFactory.auth0Provider(
-            clientID: Environment.get("AUTH0_CLIENT_ID")!,
-            clientSecret: Environment.get("AUTH0_CLIENT_SECRET")!,
-            domain: Environment.get("AUTH0_DOMAIN")!,
-            redirectURI: Environment.get("AUTH0_REDIRECT_URI")!
+            domain: env("AUTH0_DOMAIN"),
+            clientID: env("AUTH0_CLIENT_ID"),
+            clientSecret: env("AUTH0_CLIENT_SECRET"),
+            redirectURI: env("AUTH0_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "okta":
         let provider = try await oauthFactory.oktaProvider(
-            clientID: Environment.get("OKTA_CLIENT_ID")!,
-            clientSecret: Environment.get("OKTA_CLIENT_SECRET")!,
-            domain: Environment.get("OKTA_DOMAIN")!,
-            redirectURI: Environment.get("OKTA_REDIRECT_URI")!
+            domain: env("OKTA_DOMAIN"),
+            clientID: env("OKTA_CLIENT_ID"),
+            clientSecret: env("OKTA_CLIENT_SECRET"),
+            redirectURI: env("OKTA_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "cognito":
         let provider = try await oauthFactory.awsCognitoProvider(
-            clientID: Environment.get("COGNITO_CLIENT_ID")!,
-            clientSecret: Environment.get("COGNITO_CLIENT_SECRET")!,
-            region: Environment.get("COGNITO_REGION")!,
-            userPoolID: Environment.get("COGNITO_USER_POOL_ID")!,
-            redirectURI: Environment.get("COGNITO_REDIRECT_URI")!
+            region: env("COGNITO_REGION"),
+            userPoolID: env("COGNITO_USER_POOL_ID"),
+            clientID: env("COGNITO_CLIENT_ID"),
+            clientSecret: ProcessInfo.processInfo.environment["COGNITO_CLIENT_SECRET"],
+            redirectURI: env("COGNITO_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
-    // OAuth2 Providers
+
     case "discord":
-        let provider = try await oauthFactory.discordProvider(
-            clientID: Environment.get("DISCORD_CLIENT_ID")!,
-            clientSecret: Environment.get("DISCORD_CLIENT_SECRET")!,
-            redirectURI: Environment.get("DISCORD_REDIRECT_URI")!
+        let provider = oauthFactory.discordProvider(
+            clientID: env("DISCORD_CLIENT_ID"),
+            clientSecret: env("DISCORD_CLIENT_SECRET"),
+            redirectURI: env("DISCORD_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "github":
-        let provider = try await oauthFactory.githubProvider(
-            clientID: Environment.get("GITHUB_CLIENT_ID")!,
-            clientSecret: Environment.get("GITHUB_CLIENT_SECRET")!,
-            redirectURI: Environment.get("GITHUB_REDIRECT_URI")!
+        let provider = oauthFactory.githubProvider(
+            clientID: env("GITHUB_CLIENT_ID"),
+            clientSecret: env("GITHUB_CLIENT_SECRET"),
+            redirectURI: env("GITHUB_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "facebook":
         let provider = try await oauthFactory.facebookProvider(
-            clientID: Environment.get("FACEBOOK_CLIENT_ID")!,
-            clientSecret: Environment.get("FACEBOOK_CLIENT_SECRET")!,
-            redirectURI: Environment.get("FACEBOOK_REDIRECT_URI")!
+            appID: env("FACEBOOK_CLIENT_ID"),
+            appSecret: env("FACEBOOK_CLIENT_SECRET"),
+            redirectURI: env("FACEBOOK_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "linkedin":
-        let provider = try await oauthFactory.linkedInProvider(
-            clientID: Environment.get("LINKEDIN_CLIENT_ID")!,
-            clientSecret: Environment.get("LINKEDIN_CLIENT_SECRET")!,
-            redirectURI: Environment.get("LINKEDIN_REDIRECT_URI")!
+        let provider = try await oauthFactory.linkedinProvider(
+            clientID: env("LINKEDIN_CLIENT_ID"),
+            clientSecret: env("LINKEDIN_CLIENT_SECRET"),
+            redirectURI: env("LINKEDIN_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "gitlab":
         let provider = try await oauthFactory.gitlabProvider(
-            clientID: Environment.get("GITLAB_CLIENT_ID")!,
-            clientSecret: Environment.get("GITLAB_CLIENT_SECRET")!,
-            redirectURI: Environment.get("GITLAB_REDIRECT_URI")!,
+            clientID: env("GITLAB_CLIENT_ID"),
+            clientSecret: env("GITLAB_CLIENT_SECRET"),
+            redirectURI: env("GITLAB_REDIRECT_URI"),
             customInstance: nil
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "dropbox":
-        let provider = try await oauthFactory.dropboxProvider(
-            clientID: Environment.get("DROPBOX_CLIENT_ID")!,
-            clientSecret: Environment.get("DROPBOX_CLIENT_SECRET")!,
-            redirectURI: Environment.get("DROPBOX_REDIRECT_URI")!
+        let provider = oauthFactory.dropboxProvider(
+            clientID: env("DROPBOX_CLIENT_ID"),
+            clientSecret: env("DROPBOX_CLIENT_SECRET"),
+            redirectURI: env("DROPBOX_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     case "slack":
-        let provider = try await oauthFactory.slackProvider(
-            clientID: Environment.get("SLACK_CLIENT_ID")!,
-            clientSecret: Environment.get("SLACK_CLIENT_SECRET")!,
-            redirectURI: Environment.get("SLACK_REDIRECT_URI")!
+        let provider = oauthFactory.slackProvider(
+            clientID: env("SLACK_CLIENT_ID"),
+            clientSecret: env("SLACK_CLIENT_SECRET"),
+            redirectURI: env("SLACK_REDIRECT_URI")
         )
         return try await provider.refreshAccessToken(refreshToken: refreshToken)
-        
+
     default:
         throw OAuth2Error.configurationError("Unsupported provider for token refresh: \(providerName)")
     }
@@ -261,55 +263,79 @@ func refreshTokenForProvider(
 
 ## Automatic Token Refresh
 
-Here's a middleware example that automatically refreshes tokens when needed:
+Here's a Hummingbird 2 middleware that automatically refreshes tokens before they expire.
+See <doc:HummingbirdIntegration> for the full session and context setup.
 
 ```swift
-struct TokenRefreshMiddleware: AsyncMiddleware {
-    let oauthFactory: OAuthClientFactory
-    
-    func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
-        // Check if token needs refresh
-        guard let refreshToken = request.session.data["refresh_token"],
-              let expiresAt = request.session.data["token_expires_at"],
-              let provider = request.session.data["provider"],
-              let expiryTime = Double(expiresAt) else {
-            return try await next.respond(to: request)
-        }
-        
-        // Refresh if token expires within 5 minutes
-        let now = Date().timeIntervalSince1970
-        if now >= expiryTime - 300 {
+import Hummingbird
+import HummingbirdAuth
+import OAuthKit
+
+/// Refreshes an expired Google access token before the request reaches
+/// downstream route handlers.
+///
+/// Inject credentials via the initializer — `Environment` can't be awaited
+/// inside `handle`, so resolve configuration at application startup instead.
+struct TokenRefreshMiddleware<Context: SessionRequestContext>: RouterMiddleware
+where Context.Session == UserSession {
+
+    let oauthKit: OAuthClientFactory
+    let clientID: String
+    let clientSecret: String
+    let redirectURI: String
+
+    func handle(
+        _ request: Request,
+        context: Context,
+        next: (Request, Context) async throws -> Response
+    ) async throws -> Response {
+        if var session = context.sessions.session,
+           let refreshToken = session.refreshToken {
             do {
-                let (newTokens, _) = try await refreshTokenForProvider(
-                    provider,
-                    refreshToken: refreshToken,
-                    oauthFactory: oauthFactory
+                let provider = try await oauthKit.googleProvider(
+                    clientID: clientID,
+                    clientSecret: clientSecret,
+                    redirectURI: redirectURI
                 )
-                
-                // Update session with new tokens
-                request.session.data["access_token"] = newTokens.accessToken
-                if let newRefreshToken = newTokens.refreshToken {
-                    request.session.data["refresh_token"] = newRefreshToken
-                }
-                if let expiresIn = newTokens.expiresIn {
-                    request.session.data["token_expires_at"] = String(now + Double(expiresIn))
-                }
-                
+                let newTokens = try await provider.refreshAccessToken(
+                    refreshToken: refreshToken
+                )
+                session = UserSession(
+                    id: session.id,
+                    name: session.name,
+                    email: session.email,
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken ?? session.refreshToken,
+                    idToken: newTokens.idToken ?? session.idToken,
+                    provider: session.provider
+                )
+                context.sessions.setSession(session, expiresIn: .minutes(30))
             } catch {
-                // Log error and potentially redirect to re-authentication
-                request.logger.error("Token refresh failed: \(error)")
-                throw Abort(.unauthorized, reason: "Token refresh failed")
+                context.logger.warning("Token refresh failed: \(error)")
+                // Let the request continue — downstream handlers can check
+                // whether the access token is still usable.
             }
         }
-        
-        return try await next.respond(to: request)
+        return try await next(request, context)
     }
 }
 ```
 
-## API Standardization Proposal
+Wire it into a route group after `SessionMiddleware`:
 
-To improve developerBest Practices
+```swift
+let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+
+let protectedGroup = router.group()
+    .add(middleware: TokenRefreshMiddleware(
+        oauthKit: oauthKit,
+        clientID: try env.require("google_client_id"),
+        clientSecret: try env.require("google_client_secret"),
+        redirectURI: try env.require("google_redirect_uri")
+    ))
+```
+
+## Best Practices
 
 ### 1. Secure Storage
 Always store refresh tokens securely:

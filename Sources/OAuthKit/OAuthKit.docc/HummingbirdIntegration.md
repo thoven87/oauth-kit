@@ -1,22 +1,23 @@
 # Hummingbird Integration
 
-Learn how to integrate OAuthKit with the Hummingbird web framework using proper session management.
+Integrate OAuthKit with Hummingbird 2 using `HummingbirdAuth` for session management.
 
 ## Overview
 
-OAuthKit provides excellent integration with Hummingbird, Swift's modern, lightweight web framework. This guide demonstrates how to implement OAuth2 authentication in your Hummingbird applications using `HummingbirdAuth` for session management and proper async/await patterns.
+This guide shows how to add OAuth2 sign-in to a Hummingbird 2 application. It uses:
 
-## Basic Setup
+- **OAuthKit** for OAuth provider communication
+- **HummingbirdAuth** for session middleware, authenticator middleware, and request context protocols
+- **ServiceLifecycle** to wire services (OAuthKit's `OAuthClientFactory` is itself a `Service`)
 
-### Installation
-
-Add both OAuthKit and Hummingbird dependencies to your `Package.swift`:
+## Installation
 
 ```swift
+// Package.swift
 dependencies: [
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
     .package(url: "https://github.com/hummingbird-project/hummingbird-auth.git", from: "2.0.0"),
-    .package(url: "https://github.com/thoven87/oauth-kit.git", from: "1.0.0")
+    .package(url: "https://github.com/thoven87/oauth-kit.git", from: "1.0.0"),
 ],
 targets: [
     .executableTarget(
@@ -24,544 +25,470 @@ targets: [
         dependencies: [
             .product(name: "Hummingbird", package: "hummingbird"),
             .product(name: "HummingbirdAuth", package: "hummingbird-auth"),
-            .product(name: "OAuthKit", package: "oauth-kit")
+            .product(name: "OAuthKit", package: "oauth-kit"),
         ]
     )
 ]
 ```
 
-### Application Configuration
+## Session Model
 
-Set up your Hummingbird application with OAuth support:
+`HummingbirdAuth`'s sessions store **one typed value** per request. Define a `UserSession` struct that holds everything you want to persist across requests:
 
 ```swift
-import Hummingbird
 import HummingbirdAuth
 import OAuthKit
 
-struct User: Authenticatable, Codable, Sendable {
+/// The authenticated user stored in the session.
+/// `Sendable` (not `Authenticatable`) — the old HB1 protocol is removed.
+struct UserSession: Codable, Sendable {
     let id: String
     let name: String
     let email: String
+    let accessToken: String
+    let refreshToken: String?
+    /// Raw ID token — needed to build the provider end-session URL on logout.
+    let idToken: String?
+    /// Which provider authenticated this user ("google", "microsoft", etc.).
+    let provider: String
 }
 
-typealias AppRequestContext = BasicSessionRequestContext<String, User>
-
-func buildApplication(configuration: ApplicationConfiguration) async throws -> some ApplicationProtocol {
-    let router = Router(context: AppRequestContext.self)
-    
-    // Create OAuthKit factory
-    let oauthFactory = OAuthClientFactory()
-    
-    // Session storage (use appropriate storage for production)
-    let sessionStorage = MemorySessionStorage<String, User>(
-        expiration: .minutes(30)
-    )
-    
-    // Add middleware
-    router.addMiddleware {
-        LogRequestsMiddleware(.info)
-        CORSMiddleware()
-        SessionMiddleware(storage: sessionStorage)
-    }
-    
-    // Configure OAuth routes
-    try await configureOAuthRoutes(router, oauthFactory: oauthFactory)
-    
-    var application = Application(
-        router: router,
-        server: .http1(),
-        configuration: configuration
-    )
-    return application
+/// Short-lived OAuth handshake data stored separately (e.g. a signed cookie
+/// or an in-process Mutex dictionary) — NOT in the user session.
+struct OAuthHandshake: Sendable {
+    let state: String
+    let codeVerifier: String?
+    let provider: String
 }
+
+/// Request context: session key = String (cookie value), identity = UserSession.
+typealias AppRequestContext = BasicSessionRequestContext<String, UserSession>
 ```
 
-## OAuth Routes Implementation
+> **Why a separate `OAuthHandshake`?** Sessions in HummingbirdAuth store one value; a dictionary-style API does not exist. Short-lived OAuth state (the `state` and `code_verifier` parameters) should live outside the session — for example in a signed cookie or in a server-side `Mutex`-protected dictionary that is cleaned up after the callback.
 
-### Authorization Flow
+## Application Setup
 
 ```swift
 import Hummingbird
 import HummingbirdAuth
 import OAuthKit
+import ServiceLifecycle
+import Synchronization
 
+// In-process store for pending OAuth handshakes, keyed by `state` parameter.
+// Replace with Redis or a database in production.
+let pendingHandshakes: Mutex<[String: OAuthHandshake]> = Mutex([:])
+
+func buildApplication() async throws -> some ApplicationProtocol {
+    // Hummingbird's built-in Environment merges process env with a .env file.
+    // Keys are lowercased automatically; require(_:) throws instead of crashing.
+    let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+    let oauthKit = OAuthClientFactory()
+    let persist = MemoryPersistDriver()
+    let sessionStorage = SessionStorage<UserSession>(persist)
+
+    let router = Router(context: AppRequestContext.self)
+    router.addMiddleware {
+        LogRequestsMiddleware(.info)
+        SessionMiddleware(storage: sessionStorage)
+    }
+
+    configureOAuthRoutes(router, oauthKit: oauthKit)
+    configureProtectedRoutes(router)
+
+    let app = Application(router: router, configuration: .init(address: .hostname("127.0.0.1", port: 8080)))
+
+    // OAuthClientFactory is a Service — add it to the ServiceGroup so JWKS
+    // keys are kept refreshed automatically.
+    return ServiceGroup(
+        configuration: .init(
+            services: [oauthKit, app],
+            gracefulShutdownSignals: [.sigterm, .sigint],
+            logger: Logger(label: "app")
+        )
+    )
+}
+```
+
+## OAuth Routes
+
+### Initiating the flow
+
+```swift
 func configureOAuthRoutes(
     _ router: Router<AppRequestContext>,
-    oauthFactory: OAuthClientFactory
-) async throws {
-    
-    // OAuth initialization routes
+    oauthKit: OAuthClientFactory
+) {
+    // Step 1 — redirect the browser to the provider.
     router.get("auth/:provider") { request, context async throws -> Response in
-        guard let providerName = context.parameters.get("provider") else {
-            throw HTTPError(.badRequest, reason: "Provider parameter required")
-        }
-        
-        let provider = try await createOAuthProvider(providerName, factory: oauthFactory)
+        let providerName = try context.parameters.require("provider")
+
         let state = UUID().uuidString
-        let (authURL, codeVerifier) = try provider.generateAuthURL(
+        let (authURL, codeVerifier) = try await makeAuthURL(
+            provider: providerName,
             state: state,
-            scopes: getScopesForProvider(providerName)
+            oauthKit: oauthKit
         )
-        
-        // Store OAuth state in session
-        context.sessions.setSession("oauth_state", state)
-        context.sessions.setSession("code_verifier", codeVerifier ?? "")
-        context.sessions.setSession("provider", providerName)
-        
-        return Response(
-            status: .seeOther,
-            headers: [.location: authURL.absoluteString]
-        )
+
+        // Store the handshake state until the callback arrives.
+        pendingHandshakes.withLock {
+            $0[state] = OAuthHandshake(
+                state: state,
+                codeVerifier: codeVerifier,
+                provider: providerName
+            )
+        }
+
+        return Response(status: .seeOther, headers: [.location: authURL.absoluteString])
     }
-    
-    // OAuth callback handling
+
+    // Step 2 — handle the provider callback.
     router.get("auth/:provider/callback") { request, context async throws -> Response in
-        guard let providerName = context.parameters.get("provider") else {
-            throw HTTPError(.badRequest, reason: "Provider parameter required")
-        }
-        
         let queryParams = request.uri.queryParameters
-        
-        // Verify state parameter
+
         guard let receivedState = queryParams.get("state"),
-              let storedState: String = context.sessions.getSession("oauth_state"),
-              receivedState == storedState else {
-            throw HTTPError(.badRequest, reason: "Invalid state parameter")
+              let handshake = pendingHandshakes.withLock({ $0.removeValue(forKey: receivedState) })
+        else {
+            throw HTTPError(.badRequest, message: "Invalid or expired state parameter")
         }
-        
+
         guard let code = queryParams.get("code") else {
-            throw HTTPError(.badRequest, reason: "Authorization code required")
+            throw HTTPError(.badRequest, message: "Authorization code required")
         }
-        
-        let codeVerifier: String? = context.sessions.getSession("code_verifier")
-        let provider = try await createOAuthProvider(providerName, factory: oauthFactory)
-        
-        do {
-            let (tokenResponse, claims) = try await provider.exchangeCode(
-                code: code,
-                codeVerifier: codeVerifier?.isEmpty == false ? codeVerifier : nil
-            )
-            
-            // Create user from OAuth response
-            let user = User(
-                id: claims?.sub?.value ?? UUID().uuidString,
-                name: claims?.name ?? "Unknown User",
-                email: claims?.email ?? ""
-            )
-            
-            // Set authenticated user session
-            context.sessions.setSession(user)
-            
-            // Store tokens for API access
-            context.sessions.setSession("access_token", tokenResponse.accessToken)
-            if let refreshToken = tokenResponse.refreshToken {
-                context.sessions.setSession("refresh_token", refreshToken)
-            }
-            
-            // Clear OAuth temporary data
-            context.sessions.clearSession("oauth_state")
-            context.sessions.clearSession("code_verifier")
-            context.sessions.clearSession("provider")
-            
-            return Response(
-                status: .seeOther,
-                headers: [.location: "/dashboard"]
-            )
-            
-        } catch {
-            context.logger.error("OAuth token exchange failed: \(error)")
-            throw HTTPError(.unauthorized, reason: "Authentication failed")
-        }
-    }
-    
-    // Logout
-    router.post("logout") { request, context async throws -> Response in
-        context.sessions.clearAll()
-        return Response(
-            status: .seeOther,
-            headers: [.location: "/"]
+
+        let (tokenResponse, claims) = try await exchangeCode(
+            provider: handshake.provider,
+            code: code,
+            codeVerifier: handshake.codeVerifier,
+            oauthKit: oauthKit
         )
+
+        let session = UserSession(
+            id: claims?.sub?.value ?? UUID().uuidString,
+            name: claims?.name ?? "Unknown",
+            email: claims?.email ?? "",
+            accessToken: tokenResponse.accessToken,
+            refreshToken: tokenResponse.refreshToken,
+            idToken: tokenResponse.idToken,
+            provider: handshake.provider
+        )
+
+        // Store the user session — one typed value, no dictionary.
+        context.sessions.setSession(session, expiresIn: .minutes(30))
+
+        return Response(status: .seeOther, headers: [.location: "/dashboard"])
+    }
+
+    // Logout — two layers:
+    // 1. Clear the local session (always).
+    // 2. Redirect to the provider's end-session endpoint if available (SSO logout),
+    //    so the provider also invalidates the session on its side.
+    router.post("logout") { request, context async throws -> Response in
+        let session = context.sessions.session
+        context.sessions.clearSession()
+
+        // If we stored an ID token, build the provider end-session URL.
+        // endSessionURL uses the OIDC discovery `end_session_endpoint`;
+        // not all providers support this (GitHub doesn't, Google/Microsoft do).
+        if let idToken = session?.idToken,
+           let providerName = session?.provider {
+            if let endSessionURL = try? await makeEndSessionURL(
+                provider: providerName,
+                idToken: idToken,
+                postLogoutRedirectURI: "http://localhost:8080/",
+                oauthKit: oauthKit
+            ) {
+                return Response(status: .seeOther, headers: [.location: endSessionURL.absoluteString])
+            }
+        }
+
+        return Response(status: .seeOther, headers: [.location: "/"])
     }
 }
 ```
 
-### Protected Routes
+### Provider helpers
 
-Create protected routes using session authentication:
+```swift
+/// Build the provider end-session (SSO logout) URL.
+/// Only OIDC providers that advertise `end_session_endpoint` in their
+/// discovery document support this — GitHub and other OAuth-only providers
+/// do not. Falls back to `nil` so the caller can skip the redirect.
+func makeEndSessionURL(
+    provider: String,
+    idToken: String,
+    postLogoutRedirectURI: String,
+    oauthKit: OAuthClientFactory
+) async throws -> URL? {
+    let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+    switch provider.lowercased() {
+    case "google":
+        let p = try await oauthKit.googleProvider(
+            clientID: try env.require("google_client_id"),
+            clientSecret: try env.require("google_client_secret"),
+            redirectURI: try env.require("google_redirect_uri")
+        )
+        return try? p.revokeToken(
+            idToken: idToken,
+            postLogoutRedirectURI: postLogoutRedirectURI,
+            state: nil
+        )
+    case "microsoft":
+        let p = try await oauthKit.microsoftProvider(
+            clientID: try env.require("microsoft_client_id"),
+            clientSecret: try env.require("microsoft_client_secret"),
+            redirectURI: try env.require("microsoft_redirect_uri"),
+            tenantKind: .common
+        )
+        return try? p.endSessionURL(
+            idToken: idToken,
+            postLogoutRedirectURI: postLogoutRedirectURI
+        )
+    default:
+        return nil  // provider doesn't support end-session
+    }
+}
+
+func makeAuthURL(
+    provider: String,
+    state: String,
+    oauthKit: OAuthClientFactory
+) async throws -> (URL, String?) {
+    // Environment is Hummingbird's built-in type.
+    // Keys are lowercased; require(_:) throws Environment.Error if missing.
+    let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+
+    switch provider.lowercased() {
+    case "google":
+        let p = try await oauthKit.googleProvider(
+            clientID: try env.require("google_client_id"),
+            clientSecret: try env.require("google_client_secret"),
+            redirectURI: try env.require("google_redirect_uri")
+        )
+        let (url, verifier) = try p.generateAuthURL(
+            state: state,
+            scopes: ["openid", "profile", "email"]
+        )
+        return (url, verifier)
+
+    case "microsoft":
+        let p = try await oauthKit.microsoftProvider(
+            clientID: try env.require("microsoft_client_id"),
+            clientSecret: try env.require("microsoft_client_secret"),
+            redirectURI: try env.require("microsoft_redirect_uri"),
+            tenantKind: .common
+        )
+        let (url, verifier) = try p.generateAuthorizationURL(
+            state: state,
+            scopes: ["openid", "profile", "email", "User.Read"]
+        )
+        return (url, verifier)
+
+    case "github":
+        let p = oauthKit.githubProvider(
+            clientID: try env.require("github_client_id"),
+            clientSecret: try env.require("github_client_secret"),
+            redirectURI: try env.require("github_redirect_uri")
+        )
+        let (url, verifier) = try p.signInURL(
+            state: state,
+            scopes: ["user:email", "read:user"]
+        )
+        return (url, verifier)
+
+    default:
+        throw HTTPError(.badRequest, message: "Unsupported provider: \(provider)")
+    }
+}
+
+func exchangeCode(
+    provider: String,
+    code: String,
+    codeVerifier: String?,
+    oauthKit: OAuthClientFactory
+) async throws -> (TokenResponse, IDTokenClaims?) {
+    let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+
+    switch provider.lowercased() {
+    case "google":
+        let p = try await oauthKit.googleProvider(
+            clientID: try env.require("google_client_id"),
+            clientSecret: try env.require("google_client_secret"),
+            redirectURI: try env.require("google_redirect_uri")
+        )
+        let (tokenResponse, claims) = try await p.exchangeCode(
+            code: code, codeVerifier: codeVerifier
+        )
+        return (tokenResponse, claims)
+
+    case "microsoft":
+        let p = try await oauthKit.microsoftProvider(
+            clientID: try env.require("microsoft_client_id"),
+            clientSecret: try env.require("microsoft_client_secret"),
+            redirectURI: try env.require("microsoft_redirect_uri"),
+            tenantKind: .common
+        )
+        let (tokenResponse, claims) = try await p.exchangeCode(
+            code: code, codeVerifier: codeVerifier
+        )
+        return (tokenResponse, claims)
+
+    case "github":
+        let p = oauthKit.githubProvider(
+            clientID: try env.require("github_client_id"),
+            clientSecret: try env.require("github_client_secret"),
+            redirectURI: try env.require("github_redirect_uri")
+        )
+        let tokenResponse = try await p.exchangeCode(
+            code: code, codeVerifier: codeVerifier
+        )
+        return (tokenResponse, nil)
+
+    default:
+        throw HTTPError(.badRequest, message: "Unsupported provider: \(provider)")
+    }
+}
+```
+
+## Protected Routes
+
+Use `SessionAuthenticator` to restore the user from the session on each request:
 
 ```swift
 func configureProtectedRoutes(_ router: Router<AppRequestContext>) {
     let protected = router.group()
-        .add(middleware: SessionAuthenticator<String, User> { id, context in
-            // In a real app, you'd fetch from database
-            return context.sessions.getSession(id)
+        .add(middleware: SessionAuthenticator { (id: String, context) async throws -> UserSession? in
+            // Load from your database using `id` (the session cookie value).
+            // In this example we return the session value stored by setSession(_:).
+            return context.sessions.session
         })
-    
-    // Dashboard route
-    protected.get("dashboard") { request, context async throws -> DashboardResponse in
+        .add(middleware: IsAuthenticatedMiddleware<AppRequestContext>())
+
+    protected.get("dashboard") { request, context async throws -> Response in
         let user = try context.requireIdentity()
-        return DashboardResponse(
-            message: "Welcome, \(user.name)!",
-            user: user
+        return Response(
+            status: .ok,
+            body: .init(byteBuffer: .init(string: "Welcome, \(user.name)!"))
         )
     }
-    
-    // Profile route with API calls
-    protected.get("profile") { request, context async throws -> UserProfileResponse in
-        let user = try context.requireIdentity()
-        
-        // Make authenticated API call using stored token
-        guard let accessToken: String = context.sessions.getSession("access_token") else {
-            throw HTTPError(.unauthorized, reason: "No access token available")
-        }
-        
-        let profile = try await fetchUserProfile(accessToken: accessToken)
-        return UserProfileResponse(user: user, profile: profile)
-    }
-    
-    // API endpoint
-    protected.get("api/user") { request, context async throws -> User in
-        return try context.requireIdentity()
-    }
-}
 
-struct DashboardResponse: ResponseCodable {
-    let message: String
-    let user: User
-}
-
-struct UserProfileResponse: ResponseCodable {
-    let user: User
-    let profile: [String: String]
-}
-```
-
-## Provider Factory
-
-Create OAuth providers for different services:
-
-```swift
-func createOAuthProvider(
-    _ name: String,
-    factory: OAuthClientFactory
-) async throws -> any OAuth2Provider {
-    switch name.lowercased() {
-        
-    let env = Environment().merging(with: .dotEnv("../env"))    
-    
-    case "google":
-        return try await factory.googleProvider(
-            clientID: env.get("GOOGLE_CLIENT_ID")!,
-            clientSecret: env.get("GOOGLE_CLIENT_SECRET")!,
-            redirectURI: env.get("GOOGLE_REDIRECT_URI")!
-        )
-    case "microsoft":
-        return try await factory.microsoftProvider(
-            clientID: env.get("MICROSOFT_CLIENT_ID")!,
-            clientSecret: env.get("MICROSOFT_CLIENT_SECRET")!,
-            redirectURI: env.get("MICROSOFT_REDIRECT_URI")!,
-            tenantID: .common
-        )
-    case "github":
-        return try await factory.githubProvider(
-            clientID: env.get("GITHUB_CLIENT_ID")!,
-            clientSecret: env.get("GITHUB_CLIENT_SECRET")!,
-            redirectURI: env.get("GITHUB_REDIRECT_URI")!
-        )
-    case "discord":
-        return try await factory.discordProvider(
-            clientID: env.get("DISCORD_CLIENT_ID")!,
-            clientSecret: env.get("DISCORD_CLIENT_SECRET")!,
-            redirectURI: env.get("DISCORD_REDIRECT_URI")!
-        )
-    default:
-        throw HTTPError(.badRequest, reason: "Unsupported provider: \(name)")
-    }
-}
-
-func getScopesForProvider(_ provider: String) -> [String] {
-    switch provider.lowercased() {
-    case "google":
-        return ["openid", "profile", "email"]
-    case "microsoft":
-        return ["openid", "profile", "email", "User.Read"]
-    case "github":
-        return ["user:email", "read:user"]
-    case "discord":
-        return ["identify", "email"]
-    default:
-        return ["openid", "profile", "email"]
-    }
-}
-```
-
-## Session Extension Helpers
-
-Create convenient session extensions:
-
-```swift
-extension SessionProtocol {
-    func setSession<T>(_ key: String, _ value: T) where T: Codable {
-        self.setSession(SessionData(key: key, value: value))
-    }
-    
-    func getSession<T>(_ key: String) -> T? where T: Codable {
-        guard let data: SessionData<T> = self.getSession(key) else { return nil }
-        return data.value
-    }
-    
-    func clearSession(_ key: String) {
-        self.clearSession(key)
-    }
-    
-    func clearAll() {
-        // Implementation depends on your session storage
-    }
-}
-
-struct SessionData<T: Codable>: Codable {
-    let key: String
-    let value: T
-}
-```
-
-## Token Refresh Implementation
-
-Handle token refresh automatically:
-
-```swift
-struct TokenRefreshMiddleware<Context: SessionRequestContext>: RouterMiddleware 
-where Context.Identity == User {
-    
-    func handle(
-        _ request: Request,
-        context: Context,
-        next: (Request, Context) async throws -> Response
-    ) async throws -> Response {
-        
-        // Check if we have tokens that need refreshing
-        if let refreshToken: String = context.sessions.getSession("refresh_token"),
-           let expiresAt: Double = context.sessions.getSession("token_expires_at"),
-           let providerName: String = context.sessions.getSession("provider") {
-            
-            let now = Date().timeIntervalSince1970
-            if now >= expiresAt - 300 { // Refresh 5 minutes before expiry
-                do {
-                    let factory = OAuthClientFactory()
-                    let provider = try await createOAuthProvider(providerName, factory: factory)
-                    let (newTokens, _) = try await provider.refreshAccessToken(refreshToken: refreshToken)
-                    
-                    // Update session with new tokens
-                    context.sessions.setSession("access_token", newTokens.accessToken)
-                    if let newRefreshToken = newTokens.refreshToken {
-                        context.sessions.setSession("refresh_token", newRefreshToken)
-                    }
-                    let newExpiresAt = now + Double(newTokens.expiresIn ?? 3600)
-                    context.sessions.setSession("token_expires_at", newExpiresAt)
-                    
-                    context.logger.info("Token refreshed successfully")
-                } catch {
-                    context.logger.error("Token refresh failed: \(error)")
-                    // Clear invalid tokens
-                    context.sessions.clearAll()
-                    throw HTTPError(.unauthorized, reason: "Token refresh failed")
-                }
-            }
-        }
-        
-        return try await next(request, context)
+    protected.get("api/user") { request, context async throws -> UserSession in
+        try context.requireIdentity()
     }
 }
 ```
 
 ## Environment Configuration
 
-Set up your environment variables:
+Hummingbird ships a built-in `Environment` type that reads process environment
+variables and can merge in a `.env` file. Keys are **lowercased** automatically,
+and `require(_:)` throws `Environment.Error` (instead of calling `fatalError`):
 
 ```swift
-enum Environment {
-    static func get(_ key: String) -> String? {
-        ProcessInfo.processInfo.environment[key]
-    }
-    
-    static func require(_ key: String) -> String {
-        guard let value = get(key) else {
-            fatalError("Missing required environment variable: \(key)")
-        }
-        return value
-    }
-}
+// Read process env merged with .env file (async because of file I/O).
+let env = try await Environment().merging(with: Environment.dotEnv(".env"))
+
+// Access optionally:
+let id = env.get("google_client_id")
+
+// Access required (throws if missing):
+let secret = try env.require("google_client_secret")
 ```
 
-Create a `.env` file or set environment variables:
-
 ```bash
-# Google OAuth2
+# .env (never commit this file)
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
 
-# Microsoft OAuth2
 MICROSOFT_CLIENT_ID=your-microsoft-client-id
 MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
 MICROSOFT_REDIRECT_URI=http://localhost:8080/auth/microsoft/callback
 
-# GitHub OAuth2
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GITHUB_REDIRECT_URI=http://localhost:8080/auth/github/callback
-
-# Discord OAuth2
-DISCORD_CLIENT_ID=your-discord-client-id
-DISCORD_CLIENT_SECRET=your-discord-client-secret
-DISCORD_REDIRECT_URI=http://localhost:8080/auth/discord/callback
 ```
 
-## Complete Application Example
+## Token Refresh
 
-Here's a complete working application:
+Refresh expired access tokens in a middleware:
 
 ```swift
-import ArgumentParser
-import Hummingbird
-import HummingbirdAuth
-import OAuthKit
+struct TokenRefreshMiddleware<Context: SessionRequestContext>: RouterMiddleware
+where Context.Session == UserSession {
 
-@main
-struct OAuthApp: AsyncParsableCommand {
-    @Option(name: .shortAndLong)
-    var hostname: String = "127.0.0.1"
+    let oauthKit: OAuthClientFactory
+    /// OAuth credentials injected at init time — Environment can't be awaited
+    /// inside a middleware `handle` call, so pass values in up front.
+    let clientID: String
+    let clientSecret: String
+    let redirectURI: String
 
-    @Option(name: .shortAndLong)
-    var port: Int = 8080
-
-    func run() async throws {
-        let app = try await buildApplication(
-            configuration: .init(
-                address: .hostname(self.hostname, port: self.port),
-                serverName: "OAuthApp"
-            )
-        )
-        try await app.runService()
+    func handle(
+        _ request: Request,
+        context: Context,
+        next: (Request, Context) async throws -> Response
+    ) async throws -> Response {
+        // Only refresh if there is an active session with a refresh token.
+        if var session = context.sessions.session,
+           let refreshToken = session.refreshToken {
+            do {
+                // Build the provider using the credentials injected at init time.
+                let googleProvider = try await oauthKit.googleProvider(
+                    clientID: clientID,
+                    clientSecret: clientSecret,
+                    redirectURI: redirectURI
+                )
+                let newTokens = try await googleProvider.refreshAccessToken(
+                    refreshToken: refreshToken
+                )
+                session = UserSession(
+                    id: session.id,
+                    name: session.name,
+                    email: session.email,
+                    accessToken: newTokens.accessToken,
+                    refreshToken: newTokens.refreshToken ?? session.refreshToken,
+                    idToken: newTokens.idToken ?? session.idToken,
+                    provider: session.provider
+                )
+                context.sessions.setSession(session, expiresIn: .minutes(30))
+            } catch {
+                context.logger.warning("Token refresh failed: \(error)")
+            }
+        }
+        return try await next(request, context)
     }
-}
-
-func buildApplication(configuration: ApplicationConfiguration) async throws -> some ApplicationProtocol {
-    let router = Router(context: AppRequestContext.self)
-    
-    let oauthFactory = OAuthClientFactory()
-    let sessionStorage = MemorySessionStorage<String, User>(expiration: .minutes(30))
-    
-    // Middleware
-    router.addMiddleware {
-        LogRequestsMiddleware(.info)
-        CORSMiddleware()
-        SessionMiddleware(storage: sessionStorage)
-        TokenRefreshMiddleware()
-    }
-    
-    // Routes
-    router.get("/") { _, _ in
-        """
-        <h1>OAuth with Hummingbird</h1>
-        <a href="/auth/google">Login with Google</a><br>
-        <a href="/auth/microsoft">Login with Microsoft</a><br>
-        <a href="/auth/github">Login with GitHub</a><br>
-        <a href="/auth/discord">Login with Discord</a>
-        """
-    }
-    
-    // Configure OAuth routes
-    try await configureOAuthRoutes(router, oauthFactory: oauthFactory)
-    configureProtectedRoutes(router)
-    
-    var application = Application(
-        router: router,
-        server: .http1(),
-        configuration: configuration
-    )
-    
-    application.addServices(oauthFactory, sessionStorage)
-    return application
 }
 ```
 
-## API Integration
+## Error Handling
 
-Make authenticated API calls using stored tokens:
+Map `OAuth2Error` to HTTP responses:
 
 ```swift
-func fetchUserProfile(accessToken: String) async throws -> [String: String] {
-    let httpClient = HTTPClient.shared
-    
-    var request = HTTPClientRequest(url: "https://api.example.com/user")
-    request.headers.add(name: "Authorization", value: "Bearer \(accessToken)")
-    
-    let response = try await httpClient.execute(request, timeout: .seconds(30))
-    
-    guard response.status == .ok else {
-        throw HTTPError(.badGateway, reason: "API request failed")
+extension OAuth2Error: HTTPResponseError {
+    public var status: HTTPResponse.Status {
+        switch self {
+        case .configurationError:   return .internalServerError
+        case .networkError:         return .badGateway
+        case .responseError,
+             .invalidResponse:      return .badRequest
+        case .tokenError:           return .unauthorized
+        default:                    return .internalServerError
+        }
     }
-    
-    let data = try await response.body.collect(upTo: 1024 * 1024)
-    return try JSONDecoder().decode([String: String].self, from: data)
+
+    public var headers: HTTPFields { [:] }
 }
 ```
 
 ## Security Best Practices
 
-1. **Session Security**: Use secure session storage in production (Redis, database)
-2. **HTTPS**: Always use HTTPS in production environments
-3. **State Validation**: Always validate the state parameter to prevent CSRF
-4. **Token Storage**: Store tokens securely and implement proper expiration
-5. **Error Handling**: Don't expose sensitive information in error messages
-6. **CORS**: Configure CORS properly for your domain
-
-## Production Considerations
-
-### Session Storage
-
-For production, use persistent session storage:
-
-```swift
-// Redis session storage
-let redisService = RedisService(url: "redis://localhost:6379")
-let sessionStorage = RedisSessionStorage<String, User>(
-    redis: redisService,
-    expiration: .minutes(30)
-)
-
-// Database session storage
-let fluentSessionStorage = FluentSessionStorage<String, User>(
-    fluent: fluent,
-    expiration: .minutes(30)
-)
-```
-
-### Error Handling
-
-Implement proper OAuth error handling:
-
-```swift
-extension OAuth2Error: HTTPResponseError {
-    public var status: HTTPResponseStatus {
-        switch self {
-        case .configurationError:
-            return .internalServerError
-        case .networkError:
-            return .badGateway
-        case .responseError, .invalidResponse:
-            return .badRequest
-        case .tokenValidationError:
-            return .unauthorized
-        default:
-            return .internalServerError
-        }
-    }
-    
-    public var headers: HTTPFields {
-        return [:]
-    }
-}
-```
+1. **HTTPS only** — never serve OAuth callbacks over plain HTTP in production
+2. **State validation** — always verify the `state` parameter to prevent CSRF; the `pendingHandshakes` dictionary above provides this
+3. **Short-lived handshake store** — expire entries in `pendingHandshakes` after ~10 minutes to avoid memory leaks
+4. **Persistent sessions** — replace `MemoryPersistDriver` with a Redis-backed driver in production so sessions survive restarts
+5. **Secure cookies** — configure `SessionCookieParameters` with `secure: true` and `sameSite: .strict` in production
+6. **Never log tokens** — access and refresh tokens are credentials; keep them out of log output

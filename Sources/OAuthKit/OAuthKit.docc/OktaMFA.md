@@ -38,9 +38,9 @@ OAuthKit supports these Okta MFA factor types:
 import OAuthKit
 
 let provider = try await oauthFactory.oktaProvider(
+    domain: "your-tenant.okta.com",
     clientID: "your-okta-client-id",
     clientSecret: "your-okta-client-secret",
-    domain: "your-tenant.okta.com",
     redirectURI: "your-redirect-uri"
 )
 
@@ -322,9 +322,9 @@ struct OktaMFAApp {
         
         let factory = OAuthClientFactory()
         let provider = try await factory.oktaProvider(
+            domain: getEnvVar("OKTA_DOMAIN"),
             clientID: getEnvVar("OKTA_CLIENT_ID"),
             clientSecret: getEnvVar("OKTA_CLIENT_SECRET"),
-            domain: getEnvVar("OKTA_DOMAIN"),
             redirectURI: getEnvVar("OKTA_REDIRECT_URI")
         )
         

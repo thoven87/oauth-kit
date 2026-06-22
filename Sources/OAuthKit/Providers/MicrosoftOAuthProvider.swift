@@ -157,6 +157,31 @@ public struct MicrosoftOAuthProvider: Sendable {
         return userInfo
     }
 
+    /// Build the end-session (logout) URL for Microsoft sign-out.
+    ///
+    /// Redirects the user to the Microsoft identity platform's end-session endpoint so
+    /// the provider also invalidates the session on its side (SSO logout). The provider
+    /// must have advertised `end_session_endpoint` in its OIDC discovery document
+    /// (Microsoft always does).
+    ///
+    /// - Parameters:
+    ///   - idToken: The raw ID token from the user's session (`UserSession.idToken`).
+    ///   - postLogoutRedirectURI: URI to redirect back to after Microsoft logs the user out.
+    ///   - state: Optional opaque state carried through to `postLogoutRedirectURI`.
+    /// - Returns: The fully-qualified end-session URL.
+    /// - Throws: `OAuth2Error.configurationError` if the provider has no end-session endpoint.
+    public func endSessionURL(
+        idToken: String,
+        postLogoutRedirectURI: String? = nil,
+        state: String? = nil
+    ) throws -> URL {
+        try client.endSessionURL(
+            idToken: idToken,
+            postLogoutRedirectURI: postLogoutRedirectURI,
+            state: state
+        )
+    }
+
     /// Call the Microsoft Graph API
     /// - Parameters:
     ///   - accessToken: The access token from the token response
