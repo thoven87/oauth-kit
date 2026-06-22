@@ -264,9 +264,10 @@ func refreshTokenForProvider(
 ## Automatic Token Refresh
 
 Here's a Hummingbird 2 middleware that automatically refreshes tokens before they expire.
-See <doc:HummingbirdIntegration> for the full session and context setup.
+See <doc:HummingbirdIntegration> for the full session model and context setup.
 
 ```swift
+import Configuration
 import Hummingbird
 import HummingbirdAuth
 import OAuthKit
@@ -274,42 +275,41 @@ import OAuthKit
 /// Refreshes an expired Google access token before the request reaches
 /// downstream route handlers.
 ///
-/// Inject credentials via the initializer — `Environment` can't be awaited
-/// inside `handle`, so resolve configuration at application startup instead.
-struct TokenRefreshMiddleware<Context: SessionRequestContext>: RouterMiddleware
-where Context.Session == UserSession {
+/// `ConfigReader` is `Sendable` — storing a pre-scoped reader in the middleware
+/// avoids resolving credentials on every request.
+struct TokenRefreshMiddleware: RouterMiddleware {
+    typealias Context = AppRequestContext
 
     let oauthKit: OAuthClientFactory
-    let clientID: String
-    let clientSecret: String
-    let redirectURI: String
+    /// Pre-scoped reader for the active provider's credentials.
+    let providerConfig: ConfigReader
 
     func handle(
         _ request: Request,
         context: Context,
         next: (Request, Context) async throws -> Response
     ) async throws -> Response {
-        if var session = context.sessions.session,
-           let refreshToken = session.refreshToken {
+        if var user = context.sessions.session?.authenticatedUser,
+           let refreshToken = user.refreshToken {
             do {
                 let provider = try await oauthKit.googleProvider(
-                    clientID: clientID,
-                    clientSecret: clientSecret,
-                    redirectURI: redirectURI
+                    clientID: try providerConfig.require("client_id"),
+                    clientSecret: try providerConfig.require("client_secret"),
+                    redirectURI: try providerConfig.require("redirect_uri")
                 )
                 let newTokens = try await provider.refreshAccessToken(
                     refreshToken: refreshToken
                 )
-                session = UserSession(
-                    id: session.id,
-                    name: session.name,
-                    email: session.email,
+                user = AppRequestContext.Session.AuthenticatedUser(
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
                     accessToken: newTokens.accessToken,
-                    refreshToken: newTokens.refreshToken ?? session.refreshToken,
-                    idToken: newTokens.idToken ?? session.idToken,
-                    provider: session.provider
+                    refreshToken: newTokens.refreshToken ?? user.refreshToken,
+                    idToken: newTokens.idToken ?? user.idToken,
+                    provider: user.provider
                 )
-                context.sessions.setSession(session, expiresIn: .minutes(30))
+                context.sessions.setSession(.authenticated(user), expiresIn: .minutes(30))
             } catch {
                 context.logger.warning("Token refresh failed: \(error)")
                 // Let the request continue — downstream handlers can check
@@ -324,14 +324,10 @@ where Context.Session == UserSession {
 Wire it into a route group after `SessionMiddleware`:
 
 ```swift
-let env = try await Environment().merging(with: Environment.dotEnv(".env"))
-
-let protectedGroup = router.group()
+router.group()
     .add(middleware: TokenRefreshMiddleware(
         oauthKit: oauthKit,
-        clientID: try env.require("google_client_id"),
-        clientSecret: try env.require("google_client_secret"),
-        redirectURI: try env.require("google_redirect_uri")
+        providerConfig: reader.scoped(to: "google")
     ))
 ```
 
