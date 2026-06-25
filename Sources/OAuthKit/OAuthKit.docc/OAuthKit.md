@@ -6,14 +6,6 @@ A comprehensive Swift OAuth2 and OpenID Connect client library with modern async
 
 OAuthKit is a powerful, type-safe OAuth2 and OpenID Connect client library built for modern Swift applications. It provides seamless integration with popular OAuth providers while maintaining full compatibility with any Swift server framework.
 
-### Recent Improvements
-
-**✅ API Consistency Fixed**: All OAuth providers now have a consistent `refreshAccessToken(refreshToken:)` method directly on the provider, eliminating the previous inconsistency where only Google had this convenience method while others required accessing `provider.client.refreshToken()`.
-
-**✅ Device Authorization Flow**: Full support for RFC 8628 Device Authorization Flow has been implemented, enabling authentication for input-constrained devices like smart TVs, IoT devices, CLI tools, and gaming consoles.
-
-**✅ Okta MFA Support**: Complete multi-factor authentication support for Okta, including push notifications with number challenges, SMS codes, TOTP tokens, and polling mechanisms for enterprise authentication workflows.
-
 ### Key Features
 
 - **OAuth 2.0 Authorization Code Flow** with PKCE support

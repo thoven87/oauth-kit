@@ -27,13 +27,11 @@ OAuthKit provides a generic `OpenIDConnectClient` that can work with any OIDC-co
 import OAuthKit
 
 // Create client with automatic discovery
-let client = try await OpenIDConnectClient(
-    httpClient: HTTPClient.shared,
+let client = try await OAuthClientFactory().openIDConnectClient(
+    discoveryURL: "https://your-provider.com/.well-known/openid_configuration",
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
-    discoveryURL: "https://your-provider.com/.well-known/openid_configuration",
-    redirectURI: "your-redirect-uri",
-    logger: Logger(label: "OIDC")
+    redirectURI: "your-redirect-uri"
 )
 
 // Or with manual configuration
@@ -59,7 +57,8 @@ let client = try await OpenIDConnectClient(
 
 ```swift
 // 1. Generate authorization URL
-let (authURL, codeVerifier) = try client.generateAuthorizationURL(
+let pkce = OAuth2Client.generatePKCE()
+let authURL = try client.generateAuthorizationURL(
     state: UUID().uuidString,
     scopes: ["openid", "profile", "email"]
 )
@@ -69,7 +68,7 @@ let (authURL, codeVerifier) = try client.generateAuthorizationURL(
 // 3. Exchange authorization code for tokens + claims
 let (tokenResponse, claims) = try await client.exchangeCode(
     code: authorizationCode,
-    codeVerifier: codeVerifier
+    codeVerifier: pkce.codeVerifier
 )
 
 // 4. Access user information from ID token claims
@@ -147,7 +146,7 @@ OpenID Connect defines standard scopes that determine which claims are included:
 
 ```swift
 // Request specific scopes
-let (authURL, codeVerifier) = try client.generateAuthorizationURL(
+let authURL = try client.generateAuthorizationURL(
     state: "state",
     scopes: ["openid", "profile", "email", "address", "phone"]
 )
@@ -230,16 +229,17 @@ let currentEmail = updatedClaims?.email
 // Generate nonce for enhanced security
 let nonce = UUID().uuidString
 
-let (authURL, codeVerifier) = try client.generateAuthorizationURL(
+let pkce = OAuth2Client.generatePKCE()
+let authURL = try client.generateAuthorizationURL(
     state: "state",
     additionalParameters: ["nonce": nonce],
     scopes: ["openid", "profile", "email"]
 )
 
 // After token exchange, verify nonce matches
-let (tokens, claims) = try await client.exchangeCode(code: code, codeVerifier: codeVerifier)
+let (tokens, claims) = try await client.exchangeCode(code: code, codeVerifier: pkce.codeVerifier)
 guard claims.nonce == nonce else {
-    throw OAuth2Error.tokenValidationError("Nonce mismatch - possible replay attack")
+    throw OAuth2Error.tokenError("Nonce mismatch - possible replay attack")
 }
 ```
 
@@ -248,7 +248,7 @@ guard claims.nonce == nonce else {
 ```swift
 // Always use state parameter to prevent CSRF attacks
 let state = UUID().uuidString
-let (authURL, codeVerifier) = try client.generateAuthorizationURL(
+let authURL = try client.generateAuthorizationURL(
     state: state,
     scopes: ["openid", "profile", "email"]
 )
@@ -262,7 +262,7 @@ let (authURL, codeVerifier) = try client.generateAuthorizationURL(
 do {
     let (tokens, claims) = try await client.exchangeCode(code: code, codeVerifier: codeVerifier)
     // Use validated claims
-} catch OAuth2Error.tokenValidationError(let message) {
+} catch OAuth2Error.tokenError(let message) {
     // ID token validation failed
     print("Token validation failed: \(message)")
 } catch OAuth2Error.jwksError(let message) {
@@ -283,17 +283,15 @@ The `OpenIDConnectClient` works with any compliant OpenID Connect provider:
 
 ```swift
 // Generic provider setup
-let client = try await OpenIDConnectClient(
-    httpClient: HTTPClient.shared,
+let client = try await OAuthClientFactory().openIDConnectClient(
+    discoveryURL: "https://any-oidc-provider.com/.well-known/openid_configuration",
     clientID: "your-client-id",
     clientSecret: "your-client-secret",
-    discoveryURL: "https://any-oidc-provider.com/.well-known/openid_configuration",
-    redirectURI: "your-redirect-uri",
-    logger: Logger(label: "OIDC")
+    redirectURI: "your-redirect-uri"
 )
 
 // Standard OIDC flow works the same regardless of provider
-let (authURL, codeVerifier) = try client.generateAuthorizationURL(
+let authURL = try client.generateAuthorizationURL(
     state: "state",
     scopes: ["openid", "profile", "email"]
 )

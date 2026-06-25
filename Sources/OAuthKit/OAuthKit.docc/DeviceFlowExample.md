@@ -121,7 +121,7 @@ struct OAuthCLI {
             clientID: getEnvVar("MICROSOFT_CLIENT_ID"),
             clientSecret: getEnvVar("MICROSOFT_CLIENT_SECRET"),
             redirectURI: "", // Not needed for device flow
-            tenantID: .common
+            tenantKind: .common
         )
         
         print("\n🔍 Starting Microsoft authentication...")
@@ -152,9 +152,9 @@ struct OAuthCLI {
     
     private func authenticateWithAuth0(factory: OAuthClientFactory) async throws -> UserInfo {
         let provider = try await factory.auth0Provider(
+            domain: getEnvVar("AUTH0_DOMAIN"),
             clientID: getEnvVar("AUTH0_CLIENT_ID"),
             clientSecret: getEnvVar("AUTH0_CLIENT_SECRET"),
-            domain: getEnvVar("AUTH0_DOMAIN"),
             redirectURI: "" // Not needed for device flow
         )
         
