@@ -199,8 +199,9 @@ public final class JWKSRefreshService: Service {
     /// `cancelWhenGracefulShutdown(_:)` from ServiceLifecycle runs the loop in
     /// a child task and cancels it the moment graceful shutdown is triggered,
     /// so `Task.sleep` throws `CancellationError` immediately rather than
-    /// waiting for the full sleep interval to expire. The loop condition
-    /// `!Task.isShuttingDownGracefully` provides an additional clean exit path.
+    /// waiting for the full sleep interval to expire. The `CancellationError`
+    /// is caught to allow the service to shut down cleanly without bubbling up
+    /// as an unhandled service failure to `ServiceGroup`.
     public func run() async throws {
         logger.info(
             "Starting JWKS refresh service",
@@ -209,11 +210,20 @@ public final class JWKSRefreshService: Service {
 
         await refreshDueEndpoints()
 
-        try await cancelWhenGracefulShutdown {
-            while !Task.isCancelled && !Task.isShuttingDownGracefully {
-                try await Task.sleep(until: self.nextWakeupInstant(), clock: ContinuousClock())
-                await self.refreshDueEndpoints()
+        do {
+            try await cancelWhenGracefulShutdown {
+                while !Task.isCancelled && !Task.isShuttingDownGracefully {
+                    do {
+                        try await Task.sleep(until: self.nextWakeupInstant(), clock: ContinuousClock())
+                    } catch is CancellationError {
+                        break
+                    }
+                    guard !Task.isShuttingDownGracefully && !Task.isCancelled else { break }
+                    await self.refreshDueEndpoints()
+                }
             }
+        } catch is CancellationError {
+            // Task was cancelled or gracefully shut down
         }
 
         logger.info("JWKS refresh service stopped")
