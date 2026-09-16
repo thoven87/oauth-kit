@@ -234,7 +234,11 @@ public struct OAuthClientFactory: Sendable, Service {
 
     /// Service lifecycle: Run the JWKS refresh service
     public func run() async throws {
-        try await jwksRefreshService.run()
+        do {
+            try await jwksRefreshService.run()
+        } catch is CancellationError {
+            // Normal shutdown via cancellation
+        }
     }
 
     /// Immediately refresh every registered JWKS endpoint, bypassing the normal
